@@ -341,12 +341,18 @@ export async function deletePickerSession(sessionId: string): Promise<void> {
  * Returns selected media items when user completes selection
  */
 export async function openPhotoPicker(): Promise<PickerMediaItem[]> {
+  console.log('openPhotoPicker: Creating session...');
+
   // Create a new session
   const session = await createPickerSession();
+  console.log('openPhotoPicker: Session created:', session);
 
   // Open picker in new window with autoclose
+  const pickerUrl = session.pickerUri + '/autoclose';
+  console.log('openPhotoPicker: Opening picker URL:', pickerUrl);
+
   const pickerWindow = window.open(
-    session.pickerUri + '/autoclose',
+    pickerUrl,
     'google-photos-picker',
     'width=1024,height=768'
   );
@@ -360,11 +366,14 @@ export async function openPhotoPicker(): Promise<PickerMediaItem[]> {
   const timeoutMs = parseInt(session.pollingConfig.timeoutIn.replace('s', '')) * 1000 || 300000;
   const startTime = Date.now();
 
+  console.log('openPhotoPicker: Poll interval:', pollIntervalMs, 'ms, timeout:', timeoutMs, 'ms');
+
   return new Promise((resolve, reject) => {
     const pollInterval = setInterval(async () => {
       try {
         // Check if window was closed without selection
         if (pickerWindow.closed) {
+          console.log('openPhotoPicker: Picker window closed by user');
           clearInterval(pollInterval);
           await deletePickerSession(session.id);
           resolve([]);
@@ -373,6 +382,7 @@ export async function openPhotoPicker(): Promise<PickerMediaItem[]> {
 
         // Check for timeout
         if (Date.now() - startTime > timeoutMs) {
+          console.log('openPhotoPicker: Session timed out');
           clearInterval(pollInterval);
           pickerWindow.close();
           await deletePickerSession(session.id);
@@ -381,13 +391,17 @@ export async function openPhotoPicker(): Promise<PickerMediaItem[]> {
         }
 
         // Poll the session
+        console.log('openPhotoPicker: Polling session...');
         const updatedSession = await pollPickerSession(session.id);
+        console.log('openPhotoPicker: Poll result:', updatedSession);
 
         if (updatedSession.mediaItemsSet) {
+          console.log('openPhotoPicker: Media items set! Fetching items...');
           clearInterval(pollInterval);
 
           // Fetch selected media items
           const result = await listPickerMediaItems(session.id);
+          console.log('openPhotoPicker: Fetched media items:', result);
           const allItems: PickerMediaItem[] = [...result.mediaItems];
 
           // Fetch remaining pages if any
@@ -398,6 +412,8 @@ export async function openPhotoPicker(): Promise<PickerMediaItem[]> {
             nextPageToken = nextResult.nextPageToken;
           }
 
+          console.log('openPhotoPicker: Total items:', allItems.length, allItems);
+
           // Cleanup
           await deletePickerSession(session.id);
           pickerWindow.close();
@@ -405,6 +421,7 @@ export async function openPhotoPicker(): Promise<PickerMediaItem[]> {
           resolve(allItems);
         }
       } catch (error) {
+        console.error('openPhotoPicker: Error during polling:', error);
         clearInterval(pollInterval);
         pickerWindow.close();
         reject(error);
