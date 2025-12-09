@@ -375,9 +375,12 @@ export async function openPhotoPicker(): Promise<PickerMediaItem[]> {
   const startTime = Date.now();
 
   console.log('openPhotoPicker: Poll interval:', pollIntervalMs, 'ms, timeout:', timeoutMs, 'ms');
+  console.log('openPhotoPicker: pollingConfig raw:', session.pollingConfig);
 
   return new Promise((resolve, reject) => {
+    console.log('openPhotoPicker: Starting polling loop...');
     const pollInterval = setInterval(async () => {
+      console.log('openPhotoPicker: Poll tick');
       try {
         // Check if window was closed without selection
         if (pickerWindow.closed) {
