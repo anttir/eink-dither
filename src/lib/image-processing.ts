@@ -290,6 +290,89 @@ export async function scaleImage(
   return finalCtx.getImageData(0, 0, targetWidth, targetHeight);
 }
 
+export type CropMode = 'fit' | 'fill';
+
+export interface CropOffset {
+  x: number; // -1 to 1, where 0 is center
+  y: number; // -1 to 1, where 0 is center
+}
+
+/**
+ * Scale image with crop/fill mode support
+ * In 'fill' mode, image covers the entire target area (may crop edges)
+ * In 'fit' mode, entire image is visible (may have letterboxing)
+ */
+export async function scaleImageWithCrop(
+  image: HTMLImageElement | ImageBitmap | HTMLCanvasElement,
+  targetWidth: number = 1600,
+  targetHeight: number = 1200,
+  backgroundColor: string = '#FFFFFF',
+  cropMode: CropMode = 'fit',
+  cropOffset: CropOffset = { x: 0, y: 0 }
+): Promise<ImageData> {
+  const sourceWidth = image.width;
+  const sourceHeight = image.height;
+
+  const finalCanvas = document.createElement('canvas');
+  finalCanvas.width = targetWidth;
+  finalCanvas.height = targetHeight;
+  const finalCtx = finalCanvas.getContext('2d');
+  if (!finalCtx) {
+    throw new Error('Failed to get final 2D context');
+  }
+
+  // Fill with background color
+  finalCtx.fillStyle = backgroundColor;
+  finalCtx.fillRect(0, 0, targetWidth, targetHeight);
+
+  const sourceRatio = sourceWidth / sourceHeight;
+  const targetRatio = targetWidth / targetHeight;
+
+  let drawWidth: number;
+  let drawHeight: number;
+  let drawX: number;
+  let drawY: number;
+
+  if (cropMode === 'fill') {
+    // Fill mode: cover entire target, crop excess
+    if (sourceRatio > targetRatio) {
+      // Image is wider - fit to height, crop sides
+      drawHeight = targetHeight;
+      drawWidth = Math.round(targetHeight * sourceRatio);
+    } else {
+      // Image is taller - fit to width, crop top/bottom
+      drawWidth = targetWidth;
+      drawHeight = Math.round(targetWidth / sourceRatio);
+    }
+
+    // Calculate offset based on cropOffset (-1 to 1)
+    const maxOffsetX = (drawWidth - targetWidth) / 2;
+    const maxOffsetY = (drawHeight - targetHeight) / 2;
+
+    drawX = Math.round(-maxOffsetX - (cropOffset.x * maxOffsetX));
+    drawY = Math.round(-maxOffsetY - (cropOffset.y * maxOffsetY));
+  } else {
+    // Fit mode: show entire image, letterbox
+    if (sourceRatio > targetRatio) {
+      drawWidth = targetWidth;
+      drawHeight = Math.round(targetWidth / sourceRatio);
+    } else {
+      drawHeight = targetHeight;
+      drawWidth = Math.round(targetHeight * sourceRatio);
+    }
+
+    drawX = Math.round((targetWidth - drawWidth) / 2);
+    drawY = Math.round((targetHeight - drawHeight) / 2);
+  }
+
+  // Use high quality scaling
+  finalCtx.imageSmoothingEnabled = true;
+  finalCtx.imageSmoothingQuality = 'high';
+  finalCtx.drawImage(image, drawX, drawY, drawWidth, drawHeight);
+
+  return finalCtx.getImageData(0, 0, targetWidth, targetHeight);
+}
+
 /**
  * Scale image and return as canvas for further processing
  *

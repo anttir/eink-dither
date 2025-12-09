@@ -1,11 +1,12 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useCallback, useRef } from 'react'
-import { Download, Loader2, X, Play, ZoomIn, GripVertical, RotateCw } from 'lucide-react'
+import { Download, Loader2, X, Play, ZoomIn, GripVertical, RotateCw, Crop, Maximize, Move } from 'lucide-react'
 import { FileDropZone } from '../components/FileDropZone'
-import { SettingsPanel, type DitherAlgorithm, type ColorPalette } from '../components/SettingsPanel'
+import { CropModal } from '../components/CropModal'
+import { SettingsPanel, type DitherAlgorithm, type ColorPalette, type Orientation } from '../components/SettingsPanel'
 import { useGooglePhotos, fetchPhotoAsBlob, type PickerMediaItem } from '../hooks/useGooglePhotos'
 import { applyDithering, type DitheringAlgorithm, type PaletteKey } from '../lib/dithering'
-import { scaleImage } from '../lib/image-processing'
+import { scaleImageWithCrop, type CropMode, type CropOffset } from '../lib/image-processing'
 import { downloadImage, downloadAllAsZip, blobToDataUrl, imageDataToBmp, type ImageFormat } from '../lib/download'
 
 export const Route = createFileRoute('/')({ component: App })
@@ -21,6 +22,8 @@ interface ProcessedImage {
   needsProcessing: boolean
   error: string | null
   rotation: number // 0, 90, 180, 270
+  cropMode: CropMode
+  cropOffset: CropOffset
 }
 
 const paletteMap: Record<ColorPalette, PaletteKey> = {
@@ -40,11 +43,13 @@ function App() {
   const [showOverlay, setShowOverlay] = useState(false)
   const [imageFormat, setImageFormat] = useState<ImageFormat>('bmp')
   const [backgroundColor, setBackgroundColor] = useState('#FFFFFF')
+  const [orientation, setOrientation] = useState<Orientation>('portrait')
   const [images, setImages] = useState<ProcessedImage[]>([])
   const [modalImage, setModalImage] = useState<{ url: string; title: string } | null>(null)
   const [isProcessingAll, setIsProcessingAll] = useState(false)
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
   const dragOverIndex = useRef<number | null>(null)
+  const [cropModalImage, setCropModalImage] = useState<ProcessedImage | null>(null)
 
   const {
     isSignedIn,
@@ -58,7 +63,7 @@ function App() {
   } = useGooglePhotos()
 
   const processImage = useCallback(
-    async (imageElement: HTMLImageElement, imageId: string, rotation: number = 0) => {
+    async (imageElement: HTMLImageElement, imageId: string, rotation: number = 0, cropMode: CropMode = 'fit', cropOffset: CropOffset = { x: 0, y: 0 }) => {
       try {
         setImages((prev) =>
           prev.map((img) =>
@@ -88,8 +93,10 @@ function App() {
           processedImage = rotCanvas
         }
 
-        // Scale image to 1600x1200 with background color
-        const scaledImageData = await scaleImage(processedImage as HTMLImageElement, 1600, 1200, backgroundColor)
+        // Scale image with orientation and crop settings
+        const targetWidth = orientation === 'portrait' ? 1200 : 1600
+        const targetHeight = orientation === 'portrait' ? 1600 : 1200
+        const scaledImageData = await scaleImageWithCrop(processedImage, targetWidth, targetHeight, backgroundColor, cropMode, cropOffset)
 
         // Apply dithering
         const paletteKey = paletteMap[palette]
@@ -161,7 +168,7 @@ function App() {
         )
       }
     },
-    [algorithm, palette, strength, contrast, showOverlay, backgroundColor]
+    [algorithm, palette, strength, contrast, showOverlay, backgroundColor, orientation]
   )
 
   const handleFilesSelected = useCallback((files: File[]) => {
@@ -176,6 +183,8 @@ function App() {
       needsProcessing: true,
       error: null,
       rotation: 0,
+      cropMode: 'fit' as CropMode,
+      cropOffset: { x: 0, y: 0 },
     }))
 
     setImages((prev) => [...prev, ...newImages])
@@ -191,7 +200,7 @@ function App() {
       const img = new Image()
       await new Promise<void>((resolve) => {
         img.onload = async () => {
-          await processImage(img, imageData.id, imageData.rotation)
+          await processImage(img, imageData.id, imageData.rotation, imageData.cropMode, imageData.cropOffset)
           resolve()
         }
         img.onerror = () => {
@@ -243,6 +252,8 @@ function App() {
           needsProcessing: true,
           error: null,
           rotation: 0,
+          cropMode: 'fit' as CropMode,
+          cropOffset: { x: 0, y: 0 },
         }
 
         setImages((prev) => [...prev, imageData])
@@ -334,6 +345,31 @@ function App() {
       )
     )
   }, [])
+
+  const handleOpenCropModal = useCallback((image: ProcessedImage) => {
+    setCropModalImage(image)
+  }, [])
+
+  const handleCropSave = useCallback((newCropMode: CropMode, newCropOffset: CropOffset) => {
+    if (!cropModalImage) return
+
+    setImages((prev) =>
+      prev.map((img) =>
+        img.id === cropModalImage.id
+          ? {
+              ...img,
+              cropMode: newCropMode,
+              cropOffset: newCropOffset,
+              ditheredUrl: null,
+              ditheredBlob: null,
+              ditheredImageData: null,
+              needsProcessing: true,
+            }
+          : img
+      )
+    )
+    setCropModalImage(null)
+  }, [cropModalImage])
 
   // Reset dithered images when settings change (keep originals)
   const resetDitheredImages = useCallback(() => {
@@ -488,6 +524,7 @@ function App() {
               showOverlay={showOverlay}
               imageFormat={imageFormat}
               backgroundColor={backgroundColor}
+              orientation={orientation}
               onAlgorithmChange={handleAlgorithmChange}
               onPaletteChange={handlePaletteChange}
               onStrengthChange={handleStrengthChange}
@@ -495,6 +532,7 @@ function App() {
               onShowOverlayChange={handleShowOverlayChange}
               onImageFormatChange={setImageFormat}
               onBackgroundColorChange={handleBackgroundColorChange}
+              onOrientationChange={setOrientation}
             />
 
             {/* Google Photos button (only when signed in) */}
@@ -648,6 +686,20 @@ function App() {
                         <RotateCw className="w-4 h-4" />
                       </button>
 
+                      {/* Crop button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleOpenCropModal(image)
+                        }}
+                        className={`absolute bottom-2 right-10 p-1.5 ${
+                          image.cropMode === 'fill' ? 'bg-green-600 hover:bg-green-700' : 'bg-slate-600 hover:bg-slate-700'
+                        } text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity`}
+                        title={image.cropMode === 'fill' ? 'Fill mode (cropped)' : 'Fit mode (letterboxed)'}
+                      >
+                        <Crop className="w-4 h-4" />
+                      </button>
+
                       {/* Remove button */}
                       <button
                         onClick={() => handleRemoveImage(image.id)}
@@ -704,6 +756,18 @@ function App() {
             />
           </div>
         </div>
+      )}
+
+      {/* Crop Modal */}
+      {cropModalImage && (
+        <CropModal
+          imageUrl={cropModalImage.originalUrl}
+          cropMode={cropModalImage.cropMode}
+          cropOffset={cropModalImage.cropOffset}
+          orientation={orientation}
+          onSave={handleCropSave}
+          onClose={() => setCropModalImage(null)}
+        />
       )}
     </div>
   )

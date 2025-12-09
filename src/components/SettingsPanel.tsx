@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings, Palette, Wand2, ChevronDown, ChevronUp, SlidersHorizontal } from 'lucide-react';
+import { Settings, Palette, Wand2, ChevronDown, ChevronUp, SlidersHorizontal, Monitor } from 'lucide-react';
 import type { ImageFormat } from '../lib/download';
 
 export type DitherAlgorithm =
@@ -16,6 +16,8 @@ export type ColorPalette =
   | 'grayscale'
   | 'red-black-white';
 
+export type Orientation = 'portrait' | 'landscape';
+
 interface SettingsPanelProps {
   algorithm: DitherAlgorithm;
   palette: ColorPalette;
@@ -24,6 +26,7 @@ interface SettingsPanelProps {
   showOverlay: boolean;
   imageFormat: ImageFormat;
   backgroundColor: string;
+  orientation: Orientation;
   onAlgorithmChange: (algorithm: DitherAlgorithm) => void;
   onPaletteChange: (palette: ColorPalette) => void;
   onStrengthChange: (strength: number) => void;
@@ -31,6 +34,7 @@ interface SettingsPanelProps {
   onShowOverlayChange: (showOverlay: boolean) => void;
   onImageFormatChange: (format: ImageFormat) => void;
   onBackgroundColorChange: (color: string) => void;
+  onOrientationChange: (orientation: Orientation) => void;
 }
 
 const algorithms: { value: DitherAlgorithm; label: string; description: string }[] = [
@@ -97,6 +101,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   showOverlay,
   imageFormat,
   backgroundColor,
+  orientation,
   onAlgorithmChange,
   onPaletteChange,
   onStrengthChange,
@@ -104,6 +109,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onShowOverlayChange,
   onImageFormatChange,
   onBackgroundColorChange,
+  onOrientationChange,
 }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -185,6 +191,41 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 />
               ))}
           </div>
+        </div>
+
+        {/* Orientation Selection */}
+        <div className="space-y-3">
+          <label className="flex items-center gap-2 text-sm font-semibold text-slate-300 uppercase tracking-wider">
+            <Monitor className="w-4 h-4 text-cyan-400" />
+            Display Orientation
+          </label>
+          <div className="flex gap-2">
+            <button
+              onClick={() => onOrientationChange('portrait')}
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+                orientation === 'portrait'
+                  ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/25'
+                  : 'bg-slate-900/50 text-slate-300 border border-slate-700/50 hover:border-slate-600'
+              }`}
+            >
+              <div className={`w-4 h-6 border-2 rounded-sm ${orientation === 'portrait' ? 'border-white' : 'border-slate-400'}`} />
+              Portrait
+            </button>
+            <button
+              onClick={() => onOrientationChange('landscape')}
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+                orientation === 'landscape'
+                  ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/25'
+                  : 'bg-slate-900/50 text-slate-300 border border-slate-700/50 hover:border-slate-600'
+              }`}
+            >
+              <div className={`w-6 h-4 border-2 rounded-sm ${orientation === 'landscape' ? 'border-white' : 'border-slate-400'}`} />
+              Landscape
+            </button>
+          </div>
+          <p className="text-sm text-slate-500 px-1">
+            {orientation === 'portrait' ? '1200×1600 pixels' : '1600×1200 pixels'}
+          </p>
         </div>
 
         {/* Advanced Settings Toggle */}
