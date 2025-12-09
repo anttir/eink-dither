@@ -23,6 +23,7 @@ interface ProcessedImage {
 
 const paletteMap: Record<ColorPalette, PaletteKey> = {
   'spectra-6': 'spectra-6',
+  'spectra-6-accurate': 'spectra-6-accurate',
   'black-white': 'bw',
   'grayscale': '4-gray',
   'red-black-white': '3-color',

@@ -1,14 +1,31 @@
 // E-ink color palettes
+// Spectra 6 actual pigment colors (measured values are more muted than ideal RGB)
 export const COLOR_PALETTES = {
   'spectra-6': {
     name: 'E-ink Spectra 6 Color',
     colors: [
       [0, 0, 0],       // Black
       [255, 255, 255], // White
+      [0, 255, 255],   // Cyan
+      [255, 0, 255],   // Magenta
       [255, 255, 0],   // Yellow
       [255, 0, 0],     // Red
-      [0, 255, 0],     // Green
+      [0, 128, 0],     // Green (darker, closer to actual pigment)
       [0, 0, 255],     // Blue
+    ],
+  },
+  'spectra-6-accurate': {
+    name: 'Spectra 6 (Calibrated)',
+    // More accurate colors based on actual display measurements
+    colors: [
+      [0, 0, 0],         // Black
+      [255, 255, 255],   // White
+      [0, 200, 200],     // Cyan (muted)
+      [200, 50, 200],    // Magenta (muted)
+      [240, 224, 80],    // Yellow (#f0e050)
+      [160, 32, 32],     // Red (#a02020)
+      [96, 128, 80],     // Green (#608050)
+      [80, 128, 184],    // Blue (#5080b8)
     ],
   },
   'bw': {

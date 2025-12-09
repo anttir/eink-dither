@@ -9,6 +9,7 @@ export type DitherAlgorithm =
 
 export type ColorPalette =
   | 'spectra-6'
+  | 'spectra-6-accurate'
   | 'black-white'
   | 'grayscale'
   | 'red-black-white';
@@ -46,8 +47,13 @@ const algorithms: { value: DitherAlgorithm; label: string; description: string }
 const palettes: { value: ColorPalette; label: string; colors: string[] }[] = [
   {
     value: 'spectra-6',
-    label: 'E-ink Spectra 6 Color',
-    colors: ['#000000', '#FFFFFF', '#FF0000', '#FFFF00', '#FFA500', '#00FF00'],
+    label: 'Spectra 6 (8 colors)',
+    colors: ['#000000', '#FFFFFF', '#00FFFF', '#FF00FF', '#FFFF00', '#FF0000', '#008000', '#0000FF'],
+  },
+  {
+    value: 'spectra-6-accurate',
+    label: 'Spectra 6 (Calibrated)',
+    colors: ['#000000', '#FFFFFF', '#00C8C8', '#C832C8', '#F0E050', '#A02020', '#608050', '#5080B8'],
   },
   {
     value: 'black-white',
