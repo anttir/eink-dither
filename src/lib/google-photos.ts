@@ -361,7 +361,7 @@ export async function openPhotoPicker(): Promise<PickerMediaItem[]> {
   const pickerUrl = session.pickerUri;
   console.log('openPhotoPicker: Opening picker URL:', pickerUrl);
 
-  const pickerWindow = window.open(pickerUrl, '_blank');
+  const pickerWindow = window.open(pickerUrl, 'google-photos-picker', 'width=1024,height=768');
 
   if (!pickerWindow) {
     throw new Error('Failed to open picker. Please allow popups for this site.');
