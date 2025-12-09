@@ -142,7 +142,11 @@ export function useGooglePhotos(): UseGooglePhotosReturn {
    * Returns selected media items
    */
   const openPicker = useCallback(async (): Promise<PickerMediaItem[]> => {
+    console.log('useGooglePhotos.openPicker: Starting...');
+    console.log('useGooglePhotos.openPicker: isAuthenticated:', isAuthenticated());
+
     if (!isAuthenticated()) {
+      console.log('useGooglePhotos.openPicker: Not authenticated');
       setState(prev => ({
         ...prev,
         error: 'Not authenticated. Please sign in first.',
@@ -157,7 +161,9 @@ export function useGooglePhotos(): UseGooglePhotosReturn {
     }));
 
     try {
+      console.log('useGooglePhotos.openPicker: Calling openPhotoPicker...');
       const selectedItems = await openPhotoPicker();
+      console.log('useGooglePhotos.openPicker: Got items:', selectedItems);
 
       setState(prev => ({
         ...prev,
@@ -166,7 +172,7 @@ export function useGooglePhotos(): UseGooglePhotosReturn {
 
       return selectedItems;
     } catch (error) {
-      console.error('Error opening picker:', error);
+      console.error('useGooglePhotos.openPicker: Error:', error);
       setState(prev => ({
         ...prev,
         picking: false,

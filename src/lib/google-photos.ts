@@ -216,12 +216,15 @@ export async function getUserInfo(): Promise<GoogleUser> {
  * Returns a session with a pickerUri that opens the Google Photos picker
  */
 export async function createPickerSession(): Promise<PickerSession> {
+  console.log('createPickerSession: Starting...');
   const accessToken = getAccessToken();
+  console.log('createPickerSession: Access token:', accessToken ? 'present' : 'missing');
 
   if (!accessToken) {
     throw new Error('Not authenticated');
   }
 
+  console.log('createPickerSession: Calling API...');
   const response = await fetch(`${PICKER_API_BASE}/sessions`, {
     method: 'POST',
     headers: {
@@ -231,16 +234,21 @@ export async function createPickerSession(): Promise<PickerSession> {
     body: JSON.stringify({}),
   });
 
+  console.log('createPickerSession: Response status:', response.status);
+
   if (!response.ok) {
     if (response.status === 401) {
       signOut();
       throw new Error('Authentication expired');
     }
     const errorText = await response.text();
+    console.error('createPickerSession: Error:', errorText);
     throw new Error(`Failed to create picker session: ${response.status} ${errorText}`);
   }
 
-  return response.json();
+  const session = await response.json();
+  console.log('createPickerSession: Success:', session);
+  return session;
 }
 
 /**
