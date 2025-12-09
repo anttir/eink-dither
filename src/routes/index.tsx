@@ -1,12 +1,12 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useState, useCallback } from 'react'
-import { Download, Loader2, Trash2, X, Play, ZoomIn } from 'lucide-react'
+import { useState, useCallback, useRef } from 'react'
+import { Download, Loader2, X, Play, ZoomIn, GripVertical } from 'lucide-react'
 import { FileDropZone } from '../components/FileDropZone'
 import { SettingsPanel, type DitherAlgorithm, type ColorPalette } from '../components/SettingsPanel'
 import { useGooglePhotos, getPhotoUrl, type PickerMediaItem } from '../hooks/useGooglePhotos'
 import { applyDithering, type DitheringAlgorithm, type PaletteKey } from '../lib/dithering'
 import { scaleImage } from '../lib/image-processing'
-import { downloadImage, downloadAllAsZip, blobToDataUrl } from '../lib/download'
+import { downloadImage, downloadAllAsZip, blobToDataUrl, imageDataToBmp, type ImageFormat } from '../lib/download'
 
 export const Route = createFileRoute('/')({ component: App })
 
@@ -16,6 +16,7 @@ interface ProcessedImage {
   originalUrl: string
   ditheredUrl: string | null
   ditheredBlob: Blob | null
+  ditheredImageData: ImageData | null
   isProcessing: boolean
   needsProcessing: boolean
   error: string | null
@@ -36,9 +37,13 @@ function App() {
   const [strength, setStrength] = useState(1.0)
   const [contrast, setContrast] = useState(1.0)
   const [showOverlay, setShowOverlay] = useState(false)
+  const [imageFormat, setImageFormat] = useState<ImageFormat>('bmp')
+  const [backgroundColor, setBackgroundColor] = useState('#FFFFFF')
   const [images, setImages] = useState<ProcessedImage[]>([])
   const [modalImage, setModalImage] = useState<{ url: string; title: string } | null>(null)
   const [isProcessingAll, setIsProcessingAll] = useState(false)
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+  const dragOverIndex = useRef<number | null>(null)
 
   const {
     isSignedIn,
@@ -60,8 +65,8 @@ function App() {
           )
         )
 
-        // Scale image to 1600x1200
-        const scaledImageData = await scaleImage(imageElement, 1600, 1200)
+        // Scale image to 1600x1200 with background color
+        const scaledImageData = await scaleImage(imageElement, 1600, 1200, backgroundColor)
 
         // Apply dithering
         const paletteKey = paletteMap[palette]
@@ -99,11 +104,11 @@ function App() {
           ctx.fillText(settingsText, 20, canvas.height - 15)
         }
 
-        // Convert to blob and data URL
-        const blob = await new Promise<Blob>((resolve, reject) => {
+        // Create blob based on format (use PNG for preview, store ImageData for BMP download)
+        const previewBlob = await new Promise<Blob>((resolve, reject) => {
           canvas.toBlob((b) => b ? resolve(b) : reject(new Error('Failed to create blob')), 'image/png')
         })
-        const dataUrl = await blobToDataUrl(blob)
+        const dataUrl = await blobToDataUrl(previewBlob)
 
         setImages((prev) =>
           prev.map((img) =>
@@ -111,7 +116,8 @@ function App() {
               ? {
                   ...img,
                   ditheredUrl: dataUrl,
-                  ditheredBlob: blob,
+                  ditheredBlob: previewBlob,
+                  ditheredImageData: ditheredImageData,
                   isProcessing: false,
                   error: null,
                 }
@@ -132,7 +138,7 @@ function App() {
         )
       }
     },
-    [algorithm, palette, strength, contrast, showOverlay]
+    [algorithm, palette, strength, contrast, showOverlay, backgroundColor]
   )
 
   const handleFilesSelected = useCallback((files: File[]) => {
@@ -142,6 +148,7 @@ function App() {
       originalUrl: URL.createObjectURL(file),
       ditheredUrl: null,
       ditheredBlob: null,
+      ditheredImageData: null,
       isProcessing: false,
       needsProcessing: true,
       error: null,
@@ -199,6 +206,7 @@ function App() {
         originalUrl: getPhotoUrl(baseUrl, { width: 2000, height: 2000 }),
         ditheredUrl: null,
         ditheredBlob: null,
+        ditheredImageData: null,
         isProcessing: false,
         needsProcessing: true,
         error: null,
@@ -209,25 +217,51 @@ function App() {
   }, [openPicker])
 
   const handleDownloadSingle = useCallback((image: ProcessedImage) => {
-    if (image.ditheredBlob) {
-      downloadImage(image.ditheredBlob, `dithered-${image.filename}`)
+    if (!image.ditheredImageData) return
+
+    // Get base filename without extension
+    const baseName = image.filename.replace(/\.[^/.]+$/, '')
+    const extension = imageFormat === 'bmp' ? '.bmp' : '.png'
+    const filename = `${baseName}_dithered${extension}`
+
+    if (imageFormat === 'bmp') {
+      const bmpBlob = imageDataToBmp(image.ditheredImageData)
+      downloadImage(bmpBlob, filename)
+    } else {
+      if (image.ditheredBlob) {
+        downloadImage(image.ditheredBlob, filename)
+      }
     }
-  }, [])
+  }, [imageFormat])
 
   const handleDownloadAll = useCallback(async () => {
     const imagesToDownload = images.filter(
-      (img) => img.ditheredBlob && !img.isProcessing && !img.error
+      (img) => img.ditheredImageData && !img.isProcessing && !img.error
     )
 
     if (imagesToDownload.length === 0) return
 
+    const extension = imageFormat === 'bmp' ? '.bmp' : '.png'
+
     await downloadAllAsZip(
-      imagesToDownload.map((img) => ({
-        blob: img.ditheredBlob!,
-        filename: `dithered-${img.filename}`,
-      }))
+      imagesToDownload.map((img) => {
+        const baseName = img.filename.replace(/\.[^/.]+$/, '')
+        const filename = `${baseName}_dithered${extension}`
+
+        if (imageFormat === 'bmp' && img.ditheredImageData) {
+          return {
+            blob: imageDataToBmp(img.ditheredImageData),
+            filename,
+          }
+        } else {
+          return {
+            blob: img.ditheredBlob!,
+            filename,
+          }
+        }
+      })
     )
-  }, [images])
+  }, [images, imageFormat])
 
   const handleRemoveImage = useCallback((imageId: string) => {
     setImages((prev) => {
@@ -251,6 +285,84 @@ function App() {
     })
     setImages([])
   }, [images])
+
+  // Reset dithered images when settings change (keep originals)
+  const resetDitheredImages = useCallback(() => {
+    setImages((prev) =>
+      prev.map((img) => ({
+        ...img,
+        ditheredUrl: null,
+        ditheredBlob: null,
+        ditheredImageData: null,
+        needsProcessing: true,
+        error: null,
+      }))
+    )
+  }, [])
+
+  // Wrapper functions that reset dithers when settings change
+  const handleAlgorithmChange = useCallback((newAlgorithm: DitherAlgorithm) => {
+    setAlgorithm(newAlgorithm)
+    resetDitheredImages()
+  }, [resetDitheredImages])
+
+  const handlePaletteChange = useCallback((newPalette: ColorPalette) => {
+    setPalette(newPalette)
+    resetDitheredImages()
+  }, [resetDitheredImages])
+
+  const handleStrengthChange = useCallback((newStrength: number) => {
+    setStrength(newStrength)
+    resetDitheredImages()
+  }, [resetDitheredImages])
+
+  const handleContrastChange = useCallback((newContrast: number) => {
+    setContrast(newContrast)
+    resetDitheredImages()
+  }, [resetDitheredImages])
+
+  const handleShowOverlayChange = useCallback((newShowOverlay: boolean) => {
+    setShowOverlay(newShowOverlay)
+    resetDitheredImages()
+  }, [resetDitheredImages])
+
+  const handleBackgroundColorChange = useCallback((newColor: string) => {
+    setBackgroundColor(newColor)
+    resetDitheredImages()
+  }, [resetDitheredImages])
+
+  // Drag and drop handlers
+  const handleDragStart = useCallback((index: number) => {
+    setDraggedIndex(index)
+  }, [])
+
+  const handleDragOver = useCallback((e: React.DragEvent, index: number) => {
+    e.preventDefault()
+    dragOverIndex.current = index
+  }, [])
+
+  const handleDrop = useCallback(() => {
+    if (draggedIndex === null || dragOverIndex.current === null) return
+    if (draggedIndex === dragOverIndex.current) {
+      setDraggedIndex(null)
+      return
+    }
+
+    setImages((prev) => {
+      const newImages = [...prev]
+      const [draggedItem] = newImages.splice(draggedIndex, 1)
+      newImages.splice(dragOverIndex.current!, 0, draggedItem)
+      return newImages
+    })
+
+    setDraggedIndex(null)
+    dragOverIndex.current = null
+  }, [draggedIndex])
+
+  const handleDragEnd = useCallback(() => {
+    setDraggedIndex(null)
+    dragOverIndex.current = null
+  }, [])
 
   const processedCount = images.filter(
     (img) => img.ditheredUrl && !img.isProcessing && !img.error
@@ -325,11 +437,15 @@ function App() {
               strength={strength}
               contrast={contrast}
               showOverlay={showOverlay}
-              onAlgorithmChange={setAlgorithm}
-              onPaletteChange={setPalette}
-              onStrengthChange={setStrength}
-              onContrastChange={setContrast}
-              onShowOverlayChange={setShowOverlay}
+              imageFormat={imageFormat}
+              backgroundColor={backgroundColor}
+              onAlgorithmChange={handleAlgorithmChange}
+              onPaletteChange={handlePaletteChange}
+              onStrengthChange={handleStrengthChange}
+              onContrastChange={handleContrastChange}
+              onShowOverlayChange={handleShowOverlayChange}
+              onImageFormatChange={setImageFormat}
+              onBackgroundColorChange={handleBackgroundColorChange}
             />
 
             {/* Google Photos button (only when signed in) */}
@@ -408,11 +524,22 @@ function App() {
 
             {images.length > 0 && (
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                {images.map((image) => (
+                {images.map((image, index) => (
                   <div
                     key={image.id}
-                    className="bg-slate-800/50 rounded-xl overflow-hidden border border-slate-700 group"
+                    draggable
+                    onDragStart={() => handleDragStart(index)}
+                    onDragOver={(e) => handleDragOver(e, index)}
+                    onDrop={handleDrop}
+                    onDragEnd={handleDragEnd}
+                    className={`bg-slate-800/50 rounded-xl overflow-hidden border border-slate-700 group cursor-move ${
+                      draggedIndex === index ? 'opacity-50' : ''
+                    }`}
                   >
+                    {/* Drag handle */}
+                    <div className="flex items-center justify-center py-1 bg-slate-700/50 text-slate-400 hover:text-slate-200">
+                      <GripVertical className="w-4 h-4" />
+                    </div>
                     {/* Image preview */}
                     <div className="relative aspect-[4/3]">
                       <img

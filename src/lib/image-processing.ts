@@ -203,17 +203,19 @@ export function canvasToBlob(
 
 /**
  * Scale image to target dimensions using high-quality Lanczos-3 resampling
- * Maintains aspect ratio and centers the image on a white background
+ * Maintains aspect ratio and centers the image on a colored background
  *
  * @param image - Source image (HTMLImageElement or ImageBitmap)
  * @param targetWidth - Target width (default: 1600)
  * @param targetHeight - Target height (default: 1200)
+ * @param backgroundColor - Background color for letterboxing (default: '#FFFFFF')
  * @returns Promise resolving to ImageData with scaled image
  */
 export async function scaleImage(
   image: HTMLImageElement | ImageBitmap,
   targetWidth: number = 1600,
-  targetHeight: number = 1200
+  targetHeight: number = 1200,
+  backgroundColor: string = '#FFFFFF'
 ): Promise<ImageData> {
   const sourceWidth = image.width;
   const sourceHeight = image.height;
@@ -278,8 +280,8 @@ export async function scaleImage(
     throw new Error('Failed to get final 2D context');
   }
 
-  // Fill with white background
-  finalCtx.fillStyle = '#FFFFFF';
+  // Fill with background color
+  finalCtx.fillStyle = backgroundColor;
   finalCtx.fillRect(0, 0, targetWidth, targetHeight);
 
   // Place scaled image centered

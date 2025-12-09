@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Settings, Palette, Wand2, ChevronDown, ChevronUp, SlidersHorizontal } from 'lucide-react';
+import type { ImageFormat } from '../lib/download';
 
 export type DitherAlgorithm =
   | 'floyd-steinberg'
@@ -21,11 +22,15 @@ interface SettingsPanelProps {
   strength: number;
   contrast: number;
   showOverlay: boolean;
+  imageFormat: ImageFormat;
+  backgroundColor: string;
   onAlgorithmChange: (algorithm: DitherAlgorithm) => void;
   onPaletteChange: (palette: ColorPalette) => void;
   onStrengthChange: (strength: number) => void;
   onContrastChange: (contrast: number) => void;
   onShowOverlayChange: (showOverlay: boolean) => void;
+  onImageFormatChange: (format: ImageFormat) => void;
+  onBackgroundColorChange: (color: string) => void;
 }
 
 const algorithms: { value: DitherAlgorithm; label: string; description: string }[] = [
@@ -90,11 +95,15 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   strength,
   contrast,
   showOverlay,
+  imageFormat,
+  backgroundColor,
   onAlgorithmChange,
   onPaletteChange,
   onStrengthChange,
   onContrastChange,
   onShowOverlayChange,
+  onImageFormatChange,
+  onBackgroundColorChange,
 }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -241,6 +250,38 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
               </p>
             </div>
 
+            {/* Image Format */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-300">
+                Download Format
+              </label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => onImageFormatChange('bmp')}
+                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    imageFormat === 'bmp'
+                      ? 'bg-cyan-500 text-white'
+                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                  }`}
+                >
+                  BMP (24-bit)
+                </button>
+                <button
+                  onClick={() => onImageFormatChange('png')}
+                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    imageFormat === 'png'
+                      ? 'bg-cyan-500 text-white'
+                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                  }`}
+                >
+                  PNG
+                </button>
+              </div>
+              <p className="text-xs text-slate-500">
+                BMP is recommended for e-ink displays.
+              </p>
+            </div>
+
             {/* Settings Overlay */}
             <div className="flex items-center justify-between pt-2">
               <div>
@@ -253,16 +294,41 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
               </div>
               <button
                 onClick={() => onShowOverlayChange(!showOverlay)}
-                className={`relative w-12 h-6 rounded-full transition-colors ${
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                   showOverlay ? 'bg-cyan-500' : 'bg-slate-600'
                 }`}
               >
                 <span
-                  className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
-                    showOverlay ? 'left-7' : 'left-1'
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    showOverlay ? 'translate-x-6' : 'translate-x-1'
                   }`}
                 />
               </button>
+            </div>
+
+            {/* Background Color */}
+            <div className="space-y-2 pt-2">
+              <label className="text-sm font-medium text-slate-300">
+                Background Color
+              </label>
+              <p className="text-xs text-slate-500">
+                Fill color for images that don't cover the full canvas.
+              </p>
+              <div className="flex items-center gap-3">
+                <input
+                  type="color"
+                  value={backgroundColor}
+                  onChange={(e) => onBackgroundColorChange(e.target.value)}
+                  className="w-10 h-10 rounded-lg border-2 border-slate-600 cursor-pointer bg-transparent"
+                />
+                <input
+                  type="text"
+                  value={backgroundColor}
+                  onChange={(e) => onBackgroundColorChange(e.target.value)}
+                  className="flex-1 px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-slate-200 text-sm font-mono"
+                  placeholder="#FFFFFF"
+                />
+              </div>
             </div>
           </div>
         )}
