@@ -1,6 +1,7 @@
 /**
- * Google Photos API integration
- * Handles OAuth 2.0 authentication and photo fetching
+ * Google Photos Picker API integration
+ * Uses the new Picker API (2024+) instead of the deprecated Library API
+ * https://developers.google.com/photos/picker/guides/get-started-picker
  */
 
 // Types
@@ -11,29 +12,27 @@ export interface GoogleUser {
   picture?: string;
 }
 
-export interface Photo {
+export interface PickerMediaItem {
   id: string;
-  productUrl: string;
   baseUrl: string;
   mimeType: string;
-  filename: string;
-  mediaMetadata: {
-    creationTime: string;
-    width: string;
-    height: string;
-    photo?: {
-      cameraMake?: string;
-      cameraModel?: string;
-      focalLength?: number;
-      apertureFNumber?: number;
-      isoEquivalent?: number;
-    };
+  mediaFile: {
+    mimeType: string;
+    filename: string;
+    baseUrl: string;
+    width?: number;
+    height?: number;
   };
 }
 
-export interface PhotosResponse {
-  mediaItems: Photo[];
-  nextPageToken?: string;
+export interface PickerSession {
+  id: string;
+  pickerUri: string;
+  pollingConfig: {
+    pollInterval: string;
+    timeoutIn: string;
+  };
+  mediaItemsSet: boolean;
 }
 
 export interface AuthTokens {
@@ -46,10 +45,12 @@ export interface AuthTokens {
 
 // Constants
 const GOOGLE_AUTH_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
-const GOOGLE_PHOTOS_API_BASE = 'https://photoslibrary.googleapis.com/v1';
 const GOOGLE_USERINFO_ENDPOINT = 'https://www.googleapis.com/oauth2/v3/userinfo';
+const PICKER_API_BASE = 'https://photospicker.googleapis.com/v1';
+
+// Picker API scope (new, more limited scope)
 const SCOPES = [
-  'https://www.googleapis.com/auth/photoslibrary.readonly',
+  'https://www.googleapis.com/auth/photospicker.mediaitems.readonly',
   'https://www.googleapis.com/auth/userinfo.profile',
   'https://www.googleapis.com/auth/userinfo.email',
 ];
@@ -211,29 +212,48 @@ export async function getUserInfo(): Promise<GoogleUser> {
 }
 
 /**
- * List photos from Google Photos library
+ * Create a new Picker session
+ * Returns a session with a pickerUri that opens the Google Photos picker
  */
-export async function listPhotos(
-  pageSize: number = 50,
-  pageToken?: string
-): Promise<PhotosResponse> {
+export async function createPickerSession(): Promise<PickerSession> {
   const accessToken = getAccessToken();
 
   if (!accessToken) {
     throw new Error('Not authenticated');
   }
 
-  const params: Record<string, string> = {
-    pageSize: pageSize.toString(),
-  };
+  const response = await fetch(`${PICKER_API_BASE}/sessions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({}),
+  });
 
-  if (pageToken) {
-    params.pageToken = pageToken;
+  if (!response.ok) {
+    if (response.status === 401) {
+      signOut();
+      throw new Error('Authentication expired');
+    }
+    const errorText = await response.text();
+    throw new Error(`Failed to create picker session: ${response.status} ${errorText}`);
   }
 
-  const url = `${GOOGLE_PHOTOS_API_BASE}/mediaItems?${new URLSearchParams(params)}`;
+  return response.json();
+}
 
-  const response = await fetch(url, {
+/**
+ * Poll a Picker session to check if user has selected media
+ */
+export async function pollPickerSession(sessionId: string): Promise<PickerSession> {
+  const accessToken = getAccessToken();
+
+  if (!accessToken) {
+    throw new Error('Not authenticated');
+  }
+
+  const response = await fetch(`${PICKER_API_BASE}/sessions/${sessionId}`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
@@ -244,11 +264,50 @@ export async function listPhotos(
       signOut();
       throw new Error('Authentication expired');
     }
-    throw new Error(`Failed to fetch photos: ${response.statusText}`);
+    throw new Error(`Failed to poll picker session: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * List media items selected by the user in a Picker session
+ */
+export async function listPickerMediaItems(
+  sessionId: string,
+  pageSize: number = 50,
+  pageToken?: string
+): Promise<{ mediaItems: PickerMediaItem[]; nextPageToken?: string }> {
+  const accessToken = getAccessToken();
+
+  if (!accessToken) {
+    throw new Error('Not authenticated');
+  }
+
+  const params = new URLSearchParams({
+    sessionId,
+    pageSize: pageSize.toString(),
+  });
+
+  if (pageToken) {
+    params.set('pageToken', pageToken);
+  }
+
+  const response = await fetch(`${PICKER_API_BASE}/mediaItems?${params}`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      signOut();
+      throw new Error('Authentication expired');
+    }
+    throw new Error(`Failed to list media items: ${response.statusText}`);
   }
 
   const data = await response.json();
-
   return {
     mediaItems: data.mediaItems || [],
     nextPageToken: data.nextPageToken,
@@ -256,12 +315,106 @@ export async function listPhotos(
 }
 
 /**
+ * Delete a Picker session (cleanup)
+ */
+export async function deletePickerSession(sessionId: string): Promise<void> {
+  const accessToken = getAccessToken();
+
+  if (!accessToken) {
+    throw new Error('Not authenticated');
+  }
+
+  const response = await fetch(`${PICKER_API_BASE}/sessions/${sessionId}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok && response.status !== 404) {
+    console.warn(`Failed to delete picker session: ${response.statusText}`);
+  }
+}
+
+/**
+ * Open the Google Photos Picker in a new window and wait for selection
+ * Returns selected media items when user completes selection
+ */
+export async function openPhotoPicker(): Promise<PickerMediaItem[]> {
+  // Create a new session
+  const session = await createPickerSession();
+
+  // Open picker in new window with autoclose
+  const pickerWindow = window.open(
+    session.pickerUri + '/autoclose',
+    'google-photos-picker',
+    'width=1024,height=768'
+  );
+
+  if (!pickerWindow) {
+    throw new Error('Failed to open picker window. Please allow popups for this site.');
+  }
+
+  // Poll session until user selects media or times out
+  const pollIntervalMs = parseInt(session.pollingConfig.pollInterval.replace('s', '')) * 1000 || 5000;
+  const timeoutMs = parseInt(session.pollingConfig.timeoutIn.replace('s', '')) * 1000 || 300000;
+  const startTime = Date.now();
+
+  return new Promise((resolve, reject) => {
+    const pollInterval = setInterval(async () => {
+      try {
+        // Check if window was closed without selection
+        if (pickerWindow.closed) {
+          clearInterval(pollInterval);
+          await deletePickerSession(session.id);
+          resolve([]);
+          return;
+        }
+
+        // Check for timeout
+        if (Date.now() - startTime > timeoutMs) {
+          clearInterval(pollInterval);
+          pickerWindow.close();
+          await deletePickerSession(session.id);
+          reject(new Error('Picker session timed out'));
+          return;
+        }
+
+        // Poll the session
+        const updatedSession = await pollPickerSession(session.id);
+
+        if (updatedSession.mediaItemsSet) {
+          clearInterval(pollInterval);
+
+          // Fetch selected media items
+          const result = await listPickerMediaItems(session.id);
+          const allItems: PickerMediaItem[] = [...result.mediaItems];
+
+          // Fetch remaining pages if any
+          let nextPageToken = result.nextPageToken;
+          while (nextPageToken) {
+            const nextResult = await listPickerMediaItems(session.id, 50, nextPageToken);
+            allItems.push(...nextResult.mediaItems);
+            nextPageToken = nextResult.nextPageToken;
+          }
+
+          // Cleanup
+          await deletePickerSession(session.id);
+          pickerWindow.close();
+
+          resolve(allItems);
+        }
+      } catch (error) {
+        clearInterval(pollInterval);
+        pickerWindow.close();
+        reject(error);
+      }
+    }, pollIntervalMs);
+  });
+}
+
+/**
  * Get a downloadable photo URL with optional transformations
- *
- * @param baseUrl - The base URL from the photo object
- * @param width - Optional width for the image
- * @param height - Optional height for the image
- * @returns Transformed URL for downloading/displaying the photo
  */
 export function getPhotoUrl(
   baseUrl: string,
@@ -289,67 +442,4 @@ export function getPhotoUrl(
   const suffix = params.length > 0 ? `=${params.join('-')}` : '=d';
 
   return `${baseUrl}${suffix}`;
-}
-
-/**
- * Search photos by date range
- */
-export async function searchPhotos(
-  startDate: Date,
-  endDate: Date,
-  pageSize: number = 50,
-  pageToken?: string
-): Promise<PhotosResponse> {
-  const accessToken = getAccessToken();
-
-  if (!accessToken) {
-    throw new Error('Not authenticated');
-  }
-
-  const body = {
-    pageSize,
-    pageToken,
-    filters: {
-      dateFilter: {
-        ranges: [
-          {
-            startDate: {
-              year: startDate.getFullYear(),
-              month: startDate.getMonth() + 1,
-              day: startDate.getDate(),
-            },
-            endDate: {
-              year: endDate.getFullYear(),
-              month: endDate.getMonth() + 1,
-              day: endDate.getDate(),
-            },
-          },
-        ],
-      },
-    },
-  };
-
-  const response = await fetch(`${GOOGLE_PHOTOS_API_BASE}/mediaItems:search`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    if (response.status === 401) {
-      signOut();
-      throw new Error('Authentication expired');
-    }
-    throw new Error(`Failed to search photos: ${response.statusText}`);
-  }
-
-  const data = await response.json();
-
-  return {
-    mediaItems: data.mediaItems || [],
-    nextPageToken: data.nextPageToken,
-  };
 }

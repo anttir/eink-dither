@@ -1,6 +1,6 @@
 /**
- * React hook for Google Photos integration
- * Manages authentication state and photo fetching
+ * React hook for Google Photos Picker API integration
+ * Manages authentication state and photo selection via Picker
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -10,43 +10,39 @@ import {
   signOut as googleSignOut,
   handleAuthCallback,
   getUserInfo,
-  listPhotos as googleListPhotos,
+  openPhotoPicker,
   isAuthenticated,
+  getPhotoUrl,
   type GoogleUser,
-  type Photo,
+  type PickerMediaItem,
 } from '../lib/google-photos';
 
 interface UseGooglePhotosState {
   isSignedIn: boolean;
   user: GoogleUser | null;
-  photos: Photo[];
   loading: boolean;
+  picking: boolean;
   error: string | null;
-  hasMore: boolean;
 }
 
 interface UseGooglePhotosReturn extends UseGooglePhotosState {
   signIn: () => void;
   signOut: () => void;
-  fetchPhotos: (reset?: boolean) => Promise<void>;
-  fetchMore: () => Promise<void>;
+  openPicker: () => Promise<PickerMediaItem[]>;
   clearError: () => void;
 }
 
 /**
- * Hook for managing Google Photos authentication and data
+ * Hook for managing Google Photos authentication and picker
  */
 export function useGooglePhotos(): UseGooglePhotosReturn {
   const [state, setState] = useState<UseGooglePhotosState>({
     isSignedIn: false,
     user: null,
-    photos: [],
     loading: true,
+    picking: false,
     error: null,
-    hasMore: false,
   });
-
-  const [nextPageToken, setNextPageToken] = useState<string | undefined>(undefined);
 
   /**
    * Initialize authentication on mount
@@ -135,50 +131,46 @@ export function useGooglePhotos(): UseGooglePhotosReturn {
     setState({
       isSignedIn: false,
       user: null,
-      photos: [],
       loading: false,
+      picking: false,
       error: null,
-      hasMore: false,
     });
-    setNextPageToken(undefined);
   }, []);
 
   /**
-   * Fetch photos from Google Photos
+   * Open the Google Photos Picker
+   * Returns selected media items
    */
-  const fetchPhotos = useCallback(async (reset: boolean = false) => {
+  const openPicker = useCallback(async (): Promise<PickerMediaItem[]> => {
     if (!isAuthenticated()) {
       setState(prev => ({
         ...prev,
-        error: 'Not authenticated',
+        error: 'Not authenticated. Please sign in first.',
       }));
-      return;
+      return [];
     }
 
     setState(prev => ({
       ...prev,
-      loading: true,
+      picking: true,
       error: null,
     }));
 
     try {
-      const pageToken = reset ? undefined : nextPageToken;
-      const response = await googleListPhotos(50, pageToken);
+      const selectedItems = await openPhotoPicker();
 
       setState(prev => ({
         ...prev,
-        photos: reset ? response.mediaItems : [...prev.photos, ...response.mediaItems],
-        loading: false,
-        hasMore: !!response.nextPageToken,
+        picking: false,
       }));
 
-      setNextPageToken(response.nextPageToken);
+      return selectedItems;
     } catch (error) {
-      console.error('Error fetching photos:', error);
+      console.error('Error opening picker:', error);
       setState(prev => ({
         ...prev,
-        loading: false,
-        error: error instanceof Error ? error.message : 'Failed to fetch photos',
+        picking: false,
+        error: error instanceof Error ? error.message : 'Failed to open photo picker',
       }));
 
       // If authentication expired, update state
@@ -189,19 +181,10 @@ export function useGooglePhotos(): UseGooglePhotosReturn {
           user: null,
         }));
       }
-    }
-  }, [nextPageToken]);
 
-  /**
-   * Fetch more photos (pagination)
-   */
-  const fetchMore = useCallback(async () => {
-    if (!state.hasMore || state.loading) {
-      return;
+      return [];
     }
-
-    await fetchPhotos(false);
-  }, [state.hasMore, state.loading, fetchPhotos]);
+  }, []);
 
   /**
    * Clear error message
@@ -217,23 +200,10 @@ export function useGooglePhotos(): UseGooglePhotosReturn {
     ...state,
     signIn,
     signOut,
-    fetchPhotos,
-    fetchMore,
+    openPicker,
     clearError,
   };
 }
 
-/**
- * Hook variant for auto-fetching photos on authentication
- */
-export function useGooglePhotosAutoFetch(): UseGooglePhotosReturn {
-  const googlePhotos = useGooglePhotos();
-
-  useEffect(() => {
-    if (googlePhotos.isSignedIn && googlePhotos.photos.length === 0 && !googlePhotos.loading) {
-      googlePhotos.fetchPhotos(true);
-    }
-  }, [googlePhotos.isSignedIn]);
-
-  return googlePhotos;
-}
+// Re-export useful utilities
+export { getPhotoUrl, type PickerMediaItem };
