@@ -217,12 +217,16 @@ function App() {
   const handleGooglePhotosClick = useCallback(async () => {
     const selectedItems = await openPicker()
 
+    console.log('Picker returned items:', selectedItems)
+
     if (selectedItems.length === 0) return
 
     // Add each selected photo
     selectedItems.forEach((item: PickerMediaItem) => {
+      console.log('Processing item:', item)
       const baseUrl = item.mediaFile?.baseUrl || item.baseUrl
       const filename = item.mediaFile?.filename || 'google-photo.jpg'
+      console.log('baseUrl:', baseUrl, 'filename:', filename)
 
       const imageData: ProcessedImage = {
         id: `google-${item.id}-${Date.now()}`,
