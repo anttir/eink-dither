@@ -382,14 +382,9 @@ export async function openPhotoPicker(): Promise<PickerMediaItem[]> {
     const pollInterval = setInterval(async () => {
       console.log('openPhotoPicker: Poll tick');
       try {
-        // Check if window was closed without selection
-        if (pickerWindow.closed) {
-          console.log('openPhotoPicker: Picker window closed by user');
-          clearInterval(pollInterval);
-          await deletePickerSession(session.id);
-          resolve([]);
-          return;
-        }
+        // Note: We cannot reliably check pickerWindow.closed due to cross-origin restrictions
+        // The window navigates to photos.google.com which blocks access to the closed property
+        // Instead, we rely on polling and timeout
 
         // Check for timeout
         if (Date.now() - startTime > timeoutMs) {
