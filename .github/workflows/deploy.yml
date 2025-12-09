@@ -38,6 +38,7 @@ jobs:
       - name: Build
         run: |
           echo "VITE_BASE_PATH=/${{ github.event.repository.name }}/" > .env.production
+          echo "VITE_GOOGLE_CLIENT_ID=${{ vars.GOOGLE_CLIENT_ID }}" >> .env.production
           pnpm run build
 
       - name: Setup Pages
