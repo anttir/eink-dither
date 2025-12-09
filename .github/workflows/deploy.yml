@@ -36,9 +36,9 @@ jobs:
         run: pnpm install
 
       - name: Build
-        run: pnpm run build
-        env:
-          BASE_URL: /${{ github.event.repository.name }}/
+        run: |
+          echo "VITE_BASE_PATH=/${{ github.event.repository.name }}/" > .env.production
+          pnpm run build
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
