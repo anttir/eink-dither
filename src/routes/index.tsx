@@ -23,7 +23,8 @@ interface ProcessedImage {
 
 const paletteMap: Record<ColorPalette, PaletteKey> = {
   'spectra-6': 'spectra-6',
-  'spectra-6-accurate': 'spectra-6-accurate',
+  'spectra-6-ideal': 'spectra-6-ideal',
+  'spectra-6-calibrated': 'spectra-6-calibrated',
   'black-white': 'bw',
   'grayscale': '4-gray',
   'red-black-white': '3-color',
@@ -32,6 +33,8 @@ const paletteMap: Record<ColorPalette, PaletteKey> = {
 function App() {
   const [algorithm, setAlgorithm] = useState<DitherAlgorithm>('floyd-steinberg')
   const [palette, setPalette] = useState<ColorPalette>('spectra-6')
+  const [strength, setStrength] = useState(1.0)
+  const [contrast, setContrast] = useState(1.0)
   const [images, setImages] = useState<ProcessedImage[]>([])
   const [modalImage, setModalImage] = useState<{ url: string; title: string } | null>(null)
   const [isProcessingAll, setIsProcessingAll] = useState(false)
@@ -64,7 +67,9 @@ function App() {
         const ditheredCanvas = applyDithering(
           scaledCanvas,
           algorithm as DitheringAlgorithm,
-          paletteKey
+          paletteKey,
+          strength,
+          contrast
         )
 
         // Convert to blob and data URL
@@ -98,7 +103,7 @@ function App() {
         )
       }
     },
-    [algorithm, palette]
+    [algorithm, palette, strength, contrast]
   )
 
   const handleFilesSelected = useCallback((files: File[]) => {
@@ -288,8 +293,12 @@ function App() {
             <SettingsPanel
               algorithm={algorithm}
               palette={palette}
+              strength={strength}
+              contrast={contrast}
               onAlgorithmChange={setAlgorithm}
               onPaletteChange={setPalette}
+              onStrengthChange={setStrength}
+              onContrastChange={setContrast}
             />
 
             {/* Google Photos button (only when signed in) */}
