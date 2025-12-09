@@ -443,7 +443,7 @@ function App() {
 
                       {/* Zoom icon on hover */}
                       {!image.isProcessing && !image.error && (
-                        <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/50 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                        <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/50 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none">
                           <ZoomIn className="w-8 h-8 text-white" />
                         </div>
                       )}
