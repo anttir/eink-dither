@@ -355,8 +355,8 @@ export async function openPhotoPicker(): Promise<PickerMediaItem[]> {
   const session = await createPickerSession();
   console.log('openPhotoPicker: Session created:', session);
 
-  // Open picker in new window with autoclose
-  const pickerUrl = session.pickerUri + '/autoclose';
+  // Open picker in new window (without autoclose to debug)
+  const pickerUrl = session.pickerUri;
   console.log('openPhotoPicker: Opening picker URL:', pickerUrl);
 
   const pickerWindow = window.open(

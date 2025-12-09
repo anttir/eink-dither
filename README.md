@@ -74,10 +74,10 @@ Google Photos integration uses Google Photos Picker API. Follow these steps to e
 4. Name: `E-ink Dither Web`
 5. **Authorized JavaScript origins** - click ADD URI:
    - `http://localhost:5173` (for development)
-   - `https://yourusername.github.io` (for production)
+   - `https://anttir.github.io` (for production)
 6. **Authorized redirect URIs** - click ADD URI:
-   - `http://localhost:5173`
-   - `https://yourusername.github.io/eink-dither/`
+   - `http://localhost:5173/` (note the trailing slash!)
+   - `https://anttir.github.io/eink-dither/`
 7. Click **CREATE**
 8. Copy the **Client ID** (long string ending with `.apps.googleusercontent.com`)
 
