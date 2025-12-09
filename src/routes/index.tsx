@@ -684,12 +684,12 @@ function App() {
           >
             <X className="w-8 h-8" />
           </button>
-          <div className="max-w-full max-h-full" onClick={(e) => e.stopPropagation()}>
+          <div className="max-w-full max-h-full">
             <p className="text-white text-center mb-4 text-lg">{modalImage.title}</p>
             <img
               src={modalImage.url}
               alt={modalImage.title}
-              className="max-w-full max-h-[80vh] object-contain rounded-lg"
+              className="max-w-full max-h-[80vh] object-contain rounded-lg cursor-pointer"
             />
           </div>
         </div>
