@@ -3,7 +3,7 @@ import { useState, useCallback, useRef } from 'react'
 import { Download, Loader2, X, Play, ZoomIn, GripVertical, RotateCw } from 'lucide-react'
 import { FileDropZone } from '../components/FileDropZone'
 import { SettingsPanel, type DitherAlgorithm, type ColorPalette } from '../components/SettingsPanel'
-import { useGooglePhotos, getPhotoUrl, type PickerMediaItem } from '../hooks/useGooglePhotos'
+import { useGooglePhotos, fetchPhotoAsBlob, type PickerMediaItem } from '../hooks/useGooglePhotos'
 import { applyDithering, type DitheringAlgorithm, type PaletteKey } from '../lib/dithering'
 import { scaleImage } from '../lib/image-processing'
 import { downloadImage, downloadAllAsZip, blobToDataUrl, imageDataToBmp, type ImageFormat } from '../lib/download'
@@ -221,28 +221,35 @@ function App() {
 
     if (selectedItems.length === 0) return
 
-    // Add each selected photo
-    selectedItems.forEach((item: PickerMediaItem) => {
+    // Add each selected photo - fetch with authentication
+    for (const item of selectedItems) {
       console.log('Processing item:', item)
       const baseUrl = item.mediaFile?.baseUrl || item.baseUrl
       const filename = item.mediaFile?.filename || 'google-photo.jpg'
       console.log('baseUrl:', baseUrl, 'filename:', filename)
 
-      const imageData: ProcessedImage = {
-        id: `google-${item.id}-${Date.now()}`,
-        filename,
-        originalUrl: getPhotoUrl(baseUrl, { width: 2000, height: 2000 }),
-        ditheredUrl: null,
-        ditheredBlob: null,
-        ditheredImageData: null,
-        isProcessing: false,
-        needsProcessing: true,
-        error: null,
-        rotation: 0,
-      }
+      try {
+        // Fetch the image with authentication and get a blob URL
+        const blobUrl = await fetchPhotoAsBlob(baseUrl, { width: 2000, height: 2000 })
 
-      setImages((prev) => [...prev, imageData])
-    })
+        const imageData: ProcessedImage = {
+          id: `google-${item.id}-${Date.now()}`,
+          filename,
+          originalUrl: blobUrl,
+          ditheredUrl: null,
+          ditheredBlob: null,
+          ditheredImageData: null,
+          isProcessing: false,
+          needsProcessing: true,
+          error: null,
+          rotation: 0,
+        }
+
+        setImages((prev) => [...prev, imageData])
+      } catch (error) {
+        console.error('Failed to fetch photo:', error)
+      }
+    }
   }, [openPicker])
 
   const handleDownloadSingle = useCallback((image: ProcessedImage, index: number) => {

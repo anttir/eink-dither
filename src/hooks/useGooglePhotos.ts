@@ -13,6 +13,7 @@ import {
   openPhotoPicker,
   isAuthenticated,
   getPhotoUrl,
+  fetchPhotoAsBlob,
   type GoogleUser,
   type PickerMediaItem,
 } from '../lib/google-photos';
@@ -212,4 +213,4 @@ export function useGooglePhotos(): UseGooglePhotosReturn {
 }
 
 // Re-export useful utilities
-export { getPhotoUrl, type PickerMediaItem };
+export { getPhotoUrl, fetchPhotoAsBlob, type PickerMediaItem };

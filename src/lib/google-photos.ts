@@ -345,7 +345,8 @@ export async function deletePickerSession(sessionId: string): Promise<void> {
 }
 
 /**
- * Open the Google Photos Picker in a new window and wait for selection
+ * Open the Google Photos Picker in a new tab and wait for selection
+ * Based on Google's official sample implementation
  * Returns selected media items when user completes selection
  */
 export async function openPhotoPicker(): Promise<PickerMediaItem[]> {
@@ -355,42 +356,33 @@ export async function openPhotoPicker(): Promise<PickerMediaItem[]> {
   const session = await createPickerSession();
   console.log('openPhotoPicker: Session created:', session);
 
-  // Open picker in new window (without autoclose to debug)
+  // Open picker in new tab (not popup window - more reliable)
+  // Note: Google's sample uses target="_blank" link, not window.open with dimensions
   const pickerUrl = session.pickerUri;
   console.log('openPhotoPicker: Opening picker URL:', pickerUrl);
 
-  const pickerWindow = window.open(
-    pickerUrl,
-    'google-photos-picker',
-    'width=1024,height=768'
-  );
+  const pickerWindow = window.open(pickerUrl, '_blank');
 
   if (!pickerWindow) {
-    throw new Error('Failed to open picker window. Please allow popups for this site.');
+    throw new Error('Failed to open picker. Please allow popups for this site.');
   }
 
   // Poll session until user selects media or times out
+  // Following Google's official sample: poll every 5 seconds, don't check window.closed
   const pollIntervalMs = parseInt(session.pollingConfig.pollInterval.replace('s', '')) * 1000 || 5000;
   const timeoutMs = parseInt(session.pollingConfig.timeoutIn.replace('s', '')) * 1000 || 300000;
   const startTime = Date.now();
 
   console.log('openPhotoPicker: Poll interval:', pollIntervalMs, 'ms, timeout:', timeoutMs, 'ms');
-  console.log('openPhotoPicker: pollingConfig raw:', session.pollingConfig);
 
   return new Promise((resolve, reject) => {
     console.log('openPhotoPicker: Starting polling loop...');
-    const pollInterval = setInterval(async () => {
-      console.log('openPhotoPicker: Poll tick');
-      try {
-        // Note: We cannot reliably check pickerWindow.closed due to cross-origin restrictions
-        // The window navigates to photos.google.com which blocks access to the closed property
-        // Instead, we rely on polling and timeout
 
+    const poll = async () => {
+      try {
         // Check for timeout
         if (Date.now() - startTime > timeoutMs) {
           console.log('openPhotoPicker: Session timed out');
-          clearInterval(pollInterval);
-          pickerWindow.close();
           await deletePickerSession(session.id);
           reject(new Error('Picker session timed out'));
           return;
@@ -399,11 +391,10 @@ export async function openPhotoPicker(): Promise<PickerMediaItem[]> {
         // Poll the session
         console.log('openPhotoPicker: Polling session...');
         const updatedSession = await pollPickerSession(session.id);
-        console.log('openPhotoPicker: Poll result:', updatedSession);
+        console.log('openPhotoPicker: Poll result - mediaItemsSet:', updatedSession.mediaItemsSet);
 
         if (updatedSession.mediaItemsSet) {
           console.log('openPhotoPicker: Media items set! Fetching items...');
-          clearInterval(pollInterval);
 
           // Fetch selected media items
           const result = await listPickerMediaItems(session.id);
@@ -418,26 +409,37 @@ export async function openPhotoPicker(): Promise<PickerMediaItem[]> {
             nextPageToken = nextResult.nextPageToken;
           }
 
-          console.log('openPhotoPicker: Total items:', allItems.length, allItems);
+          console.log('openPhotoPicker: Total items:', allItems.length);
 
-          // Cleanup
+          // Cleanup session
           await deletePickerSession(session.id);
-          pickerWindow.close();
+
+          // Try to close the picker tab (may not work due to browser restrictions)
+          try {
+            pickerWindow.close();
+          } catch {
+            // Ignore - user may have already closed it
+          }
 
           resolve(allItems);
+        } else {
+          // Not done yet, poll again after interval
+          setTimeout(poll, pollIntervalMs);
         }
       } catch (error) {
         console.error('openPhotoPicker: Error during polling:', error);
-        clearInterval(pollInterval);
-        pickerWindow.close();
+        await deletePickerSession(session.id).catch(() => {});
         reject(error);
       }
-    }, pollIntervalMs);
+    };
+
+    // Start polling
+    setTimeout(poll, pollIntervalMs);
   });
 }
 
 /**
- * Get a downloadable photo URL with optional transformations
+ * Build photo URL with size parameters
  */
 export function getPhotoUrl(
   baseUrl: string,
@@ -465,4 +467,42 @@ export function getPhotoUrl(
   const suffix = params.length > 0 ? `=${params.join('-')}` : '=d';
 
   return `${baseUrl}${suffix}`;
+}
+
+/**
+ * Fetch photo from Google Photos with authentication
+ * Returns a blob URL that can be used in <img src="">
+ */
+export async function fetchPhotoAsBlob(
+  baseUrl: string,
+  options?: {
+    width?: number;
+    height?: number;
+    crop?: boolean;
+  }
+): Promise<string> {
+  const accessToken = getAccessToken();
+
+  if (!accessToken) {
+    throw new Error('Not authenticated');
+  }
+
+  const photoUrl = getPhotoUrl(baseUrl, options);
+
+  const response = await fetch(photoUrl, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      signOut();
+      throw new Error('Authentication expired');
+    }
+    throw new Error(`Failed to fetch photo: ${response.status}`);
+  }
+
+  const blob = await response.blob();
+  return URL.createObjectURL(blob);
 }
