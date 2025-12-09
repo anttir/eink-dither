@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useCallback, useRef } from 'react'
-import { Download, Loader2, X, Play, ZoomIn, GripVertical } from 'lucide-react'
+import { Download, Loader2, X, Play, ZoomIn, GripVertical, RotateCw } from 'lucide-react'
 import { FileDropZone } from '../components/FileDropZone'
 import { SettingsPanel, type DitherAlgorithm, type ColorPalette } from '../components/SettingsPanel'
 import { useGooglePhotos, getPhotoUrl, type PickerMediaItem } from '../hooks/useGooglePhotos'
@@ -20,6 +20,7 @@ interface ProcessedImage {
   isProcessing: boolean
   needsProcessing: boolean
   error: string | null
+  rotation: number // 0, 90, 180, 270
 }
 
 const paletteMap: Record<ColorPalette, PaletteKey> = {
@@ -57,7 +58,7 @@ function App() {
   } = useGooglePhotos()
 
   const processImage = useCallback(
-    async (imageElement: HTMLImageElement, imageId: string) => {
+    async (imageElement: HTMLImageElement, imageId: string, rotation: number = 0) => {
       try {
         setImages((prev) =>
           prev.map((img) =>
@@ -65,8 +66,30 @@ function App() {
           )
         )
 
+        // Apply rotation if needed
+        let processedImage: HTMLImageElement | HTMLCanvasElement = imageElement
+        if (rotation !== 0) {
+          const rotCanvas = document.createElement('canvas')
+          const rotCtx = rotCanvas.getContext('2d')
+          if (!rotCtx) throw new Error('Failed to get rotation context')
+
+          // Swap dimensions for 90/270 degree rotations
+          if (rotation === 90 || rotation === 270) {
+            rotCanvas.width = imageElement.height
+            rotCanvas.height = imageElement.width
+          } else {
+            rotCanvas.width = imageElement.width
+            rotCanvas.height = imageElement.height
+          }
+
+          rotCtx.translate(rotCanvas.width / 2, rotCanvas.height / 2)
+          rotCtx.rotate((rotation * Math.PI) / 180)
+          rotCtx.drawImage(imageElement, -imageElement.width / 2, -imageElement.height / 2)
+          processedImage = rotCanvas
+        }
+
         // Scale image to 1600x1200 with background color
-        const scaledImageData = await scaleImage(imageElement, 1600, 1200, backgroundColor)
+        const scaledImageData = await scaleImage(processedImage as HTMLImageElement, 1600, 1200, backgroundColor)
 
         // Apply dithering
         const paletteKey = paletteMap[palette]
@@ -152,6 +175,7 @@ function App() {
       isProcessing: false,
       needsProcessing: true,
       error: null,
+      rotation: 0,
     }))
 
     setImages((prev) => [...prev, ...newImages])
@@ -167,7 +191,7 @@ function App() {
       const img = new Image()
       await new Promise<void>((resolve) => {
         img.onload = async () => {
-          await processImage(img, imageData.id)
+          await processImage(img, imageData.id, imageData.rotation)
           resolve()
         }
         img.onerror = () => {
@@ -210,6 +234,7 @@ function App() {
         isProcessing: false,
         needsProcessing: true,
         error: null,
+        rotation: 0,
       }
 
       setImages((prev) => [...prev, imageData])
@@ -285,6 +310,23 @@ function App() {
     })
     setImages([])
   }, [images])
+
+  const handleRotateImage = useCallback((imageId: string) => {
+    setImages((prev) =>
+      prev.map((img) =>
+        img.id === imageId
+          ? {
+              ...img,
+              rotation: ((img.rotation + 90) % 360) as 0 | 90 | 180 | 270,
+              ditheredUrl: null,
+              ditheredBlob: null,
+              ditheredImageData: null,
+              needsProcessing: true,
+            }
+          : img
+      )
+    )
+  }, [])
 
   // Reset dithered images when settings change (keep originals)
   const resetDitheredImages = useCallback(() => {
@@ -541,11 +583,12 @@ function App() {
                       <GripVertical className="w-4 h-4" />
                     </div>
                     {/* Image preview */}
-                    <div className="relative aspect-[4/3]">
+                    <div className="relative aspect-[4/3] overflow-hidden">
                       <img
                         src={image.ditheredUrl || image.originalUrl}
                         alt={image.filename}
-                        className="w-full h-full object-cover cursor-pointer"
+                        className="w-full h-full object-cover cursor-pointer transition-transform"
+                        style={{ transform: image.ditheredUrl ? undefined : `rotate(${image.rotation}deg)` }}
                         onClick={() => setModalImage({
                           url: image.ditheredUrl || image.originalUrl,
                           title: image.ditheredUrl ? `Dithered: ${image.filename}` : image.filename
@@ -585,6 +628,18 @@ function App() {
                           {image.ditheredUrl ? 'Done' : 'Pending'}
                         </div>
                       )}
+
+                      {/* Rotate button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleRotateImage(image.id)
+                        }}
+                        className="absolute bottom-2 right-2 p-1.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Rotate 90°"
+                      >
+                        <RotateCw className="w-4 h-4" />
+                      </button>
 
                       {/* Remove button */}
                       <button
