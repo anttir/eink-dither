@@ -298,7 +298,7 @@ export interface CropOffset {
 }
 
 /**
- * Scale image with crop/fill mode support
+ * Scale image with crop/fill mode support and high-quality Lanczos resampling
  * In 'fill' mode, image covers the entire target area (may crop edges)
  * In 'fit' mode, entire image is visible (may have letterboxing)
  */
@@ -313,6 +313,83 @@ export async function scaleImageWithCrop(
   const sourceWidth = image.width;
   const sourceHeight = image.height;
 
+  // First, get source image data
+  const sourceCanvas = document.createElement('canvas');
+  sourceCanvas.width = sourceWidth;
+  sourceCanvas.height = sourceHeight;
+  const sourceCtx = sourceCanvas.getContext('2d');
+  if (!sourceCtx) {
+    throw new Error('Failed to get source 2D context');
+  }
+  sourceCtx.drawImage(image, 0, 0);
+
+  const sourceRatio = sourceWidth / sourceHeight;
+  const targetRatio = targetWidth / targetHeight;
+
+  let scaledWidth: number;
+  let scaledHeight: number;
+  let finalX: number;
+  let finalY: number;
+
+  if (cropMode === 'fill') {
+    // Fill mode: cover entire target, crop excess
+    if (sourceRatio > targetRatio) {
+      // Image is wider - fit to height, crop sides
+      scaledHeight = targetHeight;
+      scaledWidth = Math.round(targetHeight * sourceRatio);
+    } else {
+      // Image is taller - fit to width, crop top/bottom
+      scaledWidth = targetWidth;
+      scaledHeight = Math.round(targetWidth / sourceRatio);
+    }
+
+    // Calculate offset based on cropOffset (-1 to 1)
+    const maxOffsetX = (scaledWidth - targetWidth) / 2;
+    const maxOffsetY = (scaledHeight - targetHeight) / 2;
+
+    finalX = Math.round(-maxOffsetX - (cropOffset.x * maxOffsetX));
+    finalY = Math.round(-maxOffsetY - (cropOffset.y * maxOffsetY));
+  } else {
+    // Fit mode: show entire image, letterbox
+    if (sourceRatio > targetRatio) {
+      scaledWidth = targetWidth;
+      scaledHeight = Math.round(targetWidth / sourceRatio);
+    } else {
+      scaledHeight = targetHeight;
+      scaledWidth = Math.round(targetHeight * sourceRatio);
+    }
+
+    finalX = Math.round((targetWidth - scaledWidth) / 2);
+    finalY = Math.round((targetHeight - scaledHeight) / 2);
+  }
+
+  // Get source image data for Lanczos resampling
+  const sourceImageData = sourceCtx.getImageData(0, 0, sourceWidth, sourceHeight);
+
+  // Apply Lanczos resampling for high-quality downscaling
+  const scaleFactor = Math.min(scaledWidth / sourceWidth, scaledHeight / sourceHeight);
+  let scaledImageData: ImageData;
+
+  if (scaleFactor < 0.9) {
+    // Use Lanczos-3 for high-quality downscaling
+    scaledImageData = lanczosResample(sourceImageData, scaledWidth, scaledHeight);
+  } else {
+    // Use browser's built-in high-quality scaling for upscaling or minor scaling
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = scaledWidth;
+    tempCanvas.height = scaledHeight;
+    const tempCtx = tempCanvas.getContext('2d');
+    if (!tempCtx) {
+      throw new Error('Failed to get temporary 2D context');
+    }
+
+    tempCtx.imageSmoothingEnabled = true;
+    tempCtx.imageSmoothingQuality = 'high';
+    tempCtx.drawImage(image, 0, 0, scaledWidth, scaledHeight);
+    scaledImageData = tempCtx.getImageData(0, 0, scaledWidth, scaledHeight);
+  }
+
+  // Create final canvas with background color
   const finalCanvas = document.createElement('canvas');
   finalCanvas.width = targetWidth;
   finalCanvas.height = targetHeight;
@@ -325,50 +402,8 @@ export async function scaleImageWithCrop(
   finalCtx.fillStyle = backgroundColor;
   finalCtx.fillRect(0, 0, targetWidth, targetHeight);
 
-  const sourceRatio = sourceWidth / sourceHeight;
-  const targetRatio = targetWidth / targetHeight;
-
-  let drawWidth: number;
-  let drawHeight: number;
-  let drawX: number;
-  let drawY: number;
-
-  if (cropMode === 'fill') {
-    // Fill mode: cover entire target, crop excess
-    if (sourceRatio > targetRatio) {
-      // Image is wider - fit to height, crop sides
-      drawHeight = targetHeight;
-      drawWidth = Math.round(targetHeight * sourceRatio);
-    } else {
-      // Image is taller - fit to width, crop top/bottom
-      drawWidth = targetWidth;
-      drawHeight = Math.round(targetWidth / sourceRatio);
-    }
-
-    // Calculate offset based on cropOffset (-1 to 1)
-    const maxOffsetX = (drawWidth - targetWidth) / 2;
-    const maxOffsetY = (drawHeight - targetHeight) / 2;
-
-    drawX = Math.round(-maxOffsetX - (cropOffset.x * maxOffsetX));
-    drawY = Math.round(-maxOffsetY - (cropOffset.y * maxOffsetY));
-  } else {
-    // Fit mode: show entire image, letterbox
-    if (sourceRatio > targetRatio) {
-      drawWidth = targetWidth;
-      drawHeight = Math.round(targetWidth / sourceRatio);
-    } else {
-      drawHeight = targetHeight;
-      drawWidth = Math.round(targetHeight * sourceRatio);
-    }
-
-    drawX = Math.round((targetWidth - drawWidth) / 2);
-    drawY = Math.round((targetHeight - drawHeight) / 2);
-  }
-
-  // Use high quality scaling
-  finalCtx.imageSmoothingEnabled = true;
-  finalCtx.imageSmoothingQuality = 'high';
-  finalCtx.drawImage(image, drawX, drawY, drawWidth, drawHeight);
+  // Place scaled image at calculated position
+  finalCtx.putImageData(scaledImageData, finalX, finalY);
 
   return finalCtx.getImageData(0, 0, targetWidth, targetHeight);
 }
