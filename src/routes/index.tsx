@@ -241,13 +241,11 @@ function App() {
     })
   }, [openPicker])
 
-  const handleDownloadSingle = useCallback((image: ProcessedImage) => {
+  const handleDownloadSingle = useCallback((image: ProcessedImage, index: number) => {
     if (!image.ditheredImageData) return
 
-    // Get base filename without extension
-    const baseName = image.filename.replace(/\.[^/.]+$/, '')
-    const extension = imageFormat === 'bmp' ? '.bmp' : '.png'
-    const filename = `${baseName}_dithered${extension}`
+    // Use image00.bmp, image01.bmp format for SD card compatibility
+    const filename = `image${index.toString().padStart(2, '0')}.${imageFormat}`
 
     if (imageFormat === 'bmp') {
       const bmpBlob = imageDataToBmp(image.ditheredImageData)
@@ -260,18 +258,16 @@ function App() {
   }, [imageFormat])
 
   const handleDownloadAll = useCallback(async () => {
-    const imagesToDownload = images.filter(
-      (img) => img.ditheredImageData && !img.isProcessing && !img.error
-    )
+    const imagesToDownload = images
+      .map((img, index) => ({ img, index }))
+      .filter(({ img }) => img.ditheredImageData && !img.isProcessing && !img.error)
 
     if (imagesToDownload.length === 0) return
 
-    const extension = imageFormat === 'bmp' ? '.bmp' : '.png'
-
     await downloadAllAsZip(
-      imagesToDownload.map((img) => {
-        const baseName = img.filename.replace(/\.[^/.]+$/, '')
-        const filename = `${baseName}_dithered${extension}`
+      imagesToDownload.map(({ img, index }) => {
+        // Use image00.bmp, image01.bmp format for SD card compatibility
+        const filename = `image${index.toString().padStart(2, '0')}.${imageFormat}`
 
         if (imageFormat === 'bmp' && img.ditheredImageData) {
           return {
@@ -652,10 +648,15 @@ function App() {
 
                     {/* Footer */}
                     <div className="p-3">
-                      <p className="text-sm text-slate-300 truncate mb-2">{image.filename}</p>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-sm text-slate-300 truncate">{image.filename}</p>
+                        <p className="text-sm text-slate-500 font-mono ml-2">
+                          image{index.toString().padStart(2, '0')}.bmp
+                        </p>
+                      </div>
                       {image.ditheredUrl && (
                         <button
-                          onClick={() => handleDownloadSingle(image)}
+                          onClick={() => handleDownloadSingle(image, index)}
                           className="w-full px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
                         >
                           <Download className="w-4 h-4" />
