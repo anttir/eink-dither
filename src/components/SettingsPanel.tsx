@@ -20,10 +20,12 @@ interface SettingsPanelProps {
   palette: ColorPalette;
   strength: number;
   contrast: number;
+  showOverlay: boolean;
   onAlgorithmChange: (algorithm: DitherAlgorithm) => void;
   onPaletteChange: (palette: ColorPalette) => void;
   onStrengthChange: (strength: number) => void;
   onContrastChange: (contrast: number) => void;
+  onShowOverlayChange: (showOverlay: boolean) => void;
 }
 
 const algorithms: { value: DitherAlgorithm; label: string; description: string }[] = [
@@ -87,10 +89,12 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   palette,
   strength,
   contrast,
+  showOverlay,
   onAlgorithmChange,
   onPaletteChange,
   onStrengthChange,
   onContrastChange,
+  onShowOverlayChange,
 }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -235,6 +239,30 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
               <p className="text-xs text-slate-500">
                 Adjust image contrast before dithering.
               </p>
+            </div>
+
+            {/* Settings Overlay */}
+            <div className="flex items-center justify-between pt-2">
+              <div>
+                <label className="text-sm font-medium text-slate-300">
+                  Show Settings Overlay
+                </label>
+                <p className="text-xs text-slate-500">
+                  Display settings text on processed images for comparison.
+                </p>
+              </div>
+              <button
+                onClick={() => onShowOverlayChange(!showOverlay)}
+                className={`relative w-12 h-6 rounded-full transition-colors ${
+                  showOverlay ? 'bg-cyan-500' : 'bg-slate-600'
+                }`}
+              >
+                <span
+                  className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
+                    showOverlay ? 'left-7' : 'left-1'
+                  }`}
+                />
+              </button>
             </div>
           </div>
         )}

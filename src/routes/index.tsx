@@ -6,7 +6,7 @@ import { SettingsPanel, type DitherAlgorithm, type ColorPalette } from '../compo
 import { useGooglePhotos, getPhotoUrl, type PickerMediaItem } from '../hooks/useGooglePhotos'
 import { applyDithering, type DitheringAlgorithm, type PaletteKey } from '../lib/dithering'
 import { scaleImage } from '../lib/image-processing'
-import { downloadImage, downloadAllAsZip, canvasToBlob, blobToDataUrl } from '../lib/download'
+import { downloadImage, downloadAllAsZip, blobToDataUrl } from '../lib/download'
 
 export const Route = createFileRoute('/')({ component: App })
 
@@ -35,6 +35,7 @@ function App() {
   const [palette, setPalette] = useState<ColorPalette>('spectra-6')
   const [strength, setStrength] = useState(1.0)
   const [contrast, setContrast] = useState(1.0)
+  const [showOverlay, setShowOverlay] = useState(false)
   const [images, setImages] = useState<ProcessedImage[]>([])
   const [modalImage, setModalImage] = useState<{ url: string; title: string } | null>(null)
   const [isProcessingAll, setIsProcessingAll] = useState(false)
@@ -60,20 +61,48 @@ function App() {
         )
 
         // Scale image to 1600x1200
-        const scaledCanvas = scaleImage(imageElement, 1600, 1200)
+        const scaledImageData = await scaleImage(imageElement, 1600, 1200)
 
         // Apply dithering
         const paletteKey = paletteMap[palette]
-        const ditheredCanvas = applyDithering(
-          scaledCanvas,
+        const ditheredImageData = applyDithering(
+          scaledImageData,
           algorithm as DitheringAlgorithm,
           paletteKey,
           strength,
           contrast
         )
 
+        // Convert ImageData to canvas then to blob
+        const canvas = document.createElement('canvas')
+        canvas.width = ditheredImageData.width
+        canvas.height = ditheredImageData.height
+        const ctx = canvas.getContext('2d')
+        if (!ctx) throw new Error('Failed to get canvas context')
+        ctx.putImageData(ditheredImageData, 0, 0)
+
+        // Draw settings overlay if enabled
+        if (showOverlay) {
+          const algoLabel = algorithm.charAt(0).toUpperCase() + algorithm.slice(1).replace('-', ' ')
+          const paletteLabel = palette.replace(/-/g, ' ')
+          const settingsText = `${algoLabel} | ${paletteLabel} | S:${strength.toFixed(1)} | C:${contrast.toFixed(1)}`
+
+          ctx.font = 'bold 32px sans-serif'
+          const textWidth = ctx.measureText(settingsText).width
+
+          // Draw background bar
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'
+          ctx.fillRect(0, canvas.height - 50, textWidth + 40, 50)
+
+          // Draw text
+          ctx.fillStyle = '#FFFFFF'
+          ctx.fillText(settingsText, 20, canvas.height - 15)
+        }
+
         // Convert to blob and data URL
-        const blob = await canvasToBlob(ditheredCanvas)
+        const blob = await new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob((b) => b ? resolve(b) : reject(new Error('Failed to create blob')), 'image/png')
+        })
         const dataUrl = await blobToDataUrl(blob)
 
         setImages((prev) =>
@@ -103,7 +132,7 @@ function App() {
         )
       }
     },
-    [algorithm, palette, strength, contrast]
+    [algorithm, palette, strength, contrast, showOverlay]
   )
 
   const handleFilesSelected = useCallback((files: File[]) => {
@@ -295,10 +324,12 @@ function App() {
               palette={palette}
               strength={strength}
               contrast={contrast}
+              showOverlay={showOverlay}
               onAlgorithmChange={setAlgorithm}
               onPaletteChange={setPalette}
               onStrengthChange={setStrength}
               onContrastChange={setContrast}
+              onShowOverlayChange={setShowOverlay}
             />
 
             {/* Google Photos button (only when signed in) */}
