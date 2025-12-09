@@ -35,17 +35,73 @@ pnpm run build
 
 ## Google Photos Setup
 
-To enable Google Photos integration, create a Google Cloud project:
+Google Photos integration uses Google Photos Picker API. Follow these steps to enable it:
+
+### 1. Create Google Cloud Project
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project
-3. Enable **Google Photos Library API**
-4. Create OAuth 2.0 Client ID (Web application)
-5. Add authorized origins and redirect URIs
-6. Create `.env.local`:
-   ```
-   VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
-   ```
+2. Click the project selector in the top bar
+3. Click **NEW PROJECT**
+4. Project name: `eink-dither` (or any name you prefer)
+5. Click **CREATE**
+6. Wait for the project to be created, then select it as active
+
+### 2. Enable Photos Picker API
+
+1. In the left menu: **APIs & Services** → **Library**
+2. Search for: `Photos Picker`
+3. Click **Google Photos Picker API**
+4. Click the blue **ENABLE** button
+
+### 3. Configure OAuth Consent Screen
+
+1. In the left menu: **APIs & Services** → **OAuth consent screen**
+2. Select **External** → **CREATE**
+3. Fill in:
+   - App name: `E-ink Dither`
+   - User support email: your email
+   - Developer contact email: your email
+4. Click **SAVE AND CONTINUE**
+5. On Scopes page: just click **SAVE AND CONTINUE** (no scopes needed)
+6. On Test users page: click **SAVE AND CONTINUE**
+7. On Summary: click **BACK TO DASHBOARD**
+
+### 4. Create OAuth Client ID
+
+1. In the left menu: **APIs & Services** → **Credentials**
+2. Click **+ CREATE CREDENTIALS** → **OAuth client ID**
+3. Application type: `Web application`
+4. Name: `E-ink Dither Web`
+5. **Authorized JavaScript origins** - click ADD URI:
+   - `http://localhost:5173` (for development)
+   - `https://yourusername.github.io` (for production)
+6. **Authorized redirect URIs** - click ADD URI:
+   - `http://localhost:5173`
+   - `https://yourusername.github.io/eink-dither/`
+7. Click **CREATE**
+8. Copy the **Client ID** (long string ending with `.apps.googleusercontent.com`)
+
+### 5. Configure the Application
+
+Create a `.env.local` file in the project root:
+
+```
+VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+```
+
+For production deployment, set the environment variable in your CI/CD or create `.env.production`:
+
+```
+VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+```
+
+### Note on App Verification
+
+While in "Testing" mode, only users added as test users can use Google Photos integration. To allow all users:
+
+1. Go to **OAuth consent screen**
+2. Click **PUBLISH APP**
+3. Follow Google's verification process (may require privacy policy URL)
 
 ## Tech Stack
 
