@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { Settings, Palette, Wand2, ChevronDown, ChevronUp, SlidersHorizontal, Monitor } from 'lucide-react';
+import { Settings, Palette, Wand2, ChevronDown, ChevronUp, SlidersHorizontal, Monitor, Zap } from 'lucide-react';
 import type { ImageFormat } from '../lib/download';
+import type { PreProcessingSettings } from '../lib/image-processing';
+import { DEFAULT_PREPROCESSING, RECOMMENDED_PREPROCESSING } from '../lib/image-processing';
 
 export type DitherAlgorithm =
   | 'floyd-steinberg'
@@ -27,6 +29,7 @@ interface SettingsPanelProps {
   imageFormat: ImageFormat;
   backgroundColor: string;
   orientation: Orientation;
+  preProcessing: PreProcessingSettings;
   onAlgorithmChange: (algorithm: DitherAlgorithm) => void;
   onPaletteChange: (palette: ColorPalette) => void;
   onStrengthChange: (strength: number) => void;
@@ -35,6 +38,7 @@ interface SettingsPanelProps {
   onImageFormatChange: (format: ImageFormat) => void;
   onBackgroundColorChange: (color: string) => void;
   onOrientationChange: (orientation: Orientation) => void;
+  onPreProcessingChange: (settings: PreProcessingSettings) => void;
 }
 
 const algorithms: { value: DitherAlgorithm; label: string; description: string }[] = [
@@ -102,6 +106,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   imageFormat,
   backgroundColor,
   orientation,
+  preProcessing,
   onAlgorithmChange,
   onPaletteChange,
   onStrengthChange,
@@ -110,8 +115,23 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onImageFormatChange,
   onBackgroundColorChange,
   onOrientationChange,
+  onPreProcessingChange,
 }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  const isPreProcessingDefault =
+    preProcessing.gamma === DEFAULT_PREPROCESSING.gamma &&
+    preProcessing.sharpness === DEFAULT_PREPROCESSING.sharpness &&
+    preProcessing.saturation === DEFAULT_PREPROCESSING.saturation &&
+    preProcessing.brightness === DEFAULT_PREPROCESSING.brightness &&
+    preProcessing.contrast === DEFAULT_PREPROCESSING.contrast;
+
+  const isPreProcessingRecommended =
+    preProcessing.gamma === RECOMMENDED_PREPROCESSING.gamma &&
+    preProcessing.sharpness === RECOMMENDED_PREPROCESSING.sharpness &&
+    preProcessing.saturation === RECOMMENDED_PREPROCESSING.saturation &&
+    preProcessing.brightness === RECOMMENDED_PREPROCESSING.brightness &&
+    preProcessing.contrast === RECOMMENDED_PREPROCESSING.contrast;
 
   return (
     <div className="w-full bg-slate-800/50 rounded-2xl border border-slate-700/50 shadow-xl overflow-hidden">
@@ -247,6 +267,143 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
         {/* Advanced Settings Content */}
         {showAdvanced && (
           <div className="space-y-4 p-4 rounded-xl bg-slate-900/30 border border-slate-700/50">
+            {/* Pre-processing Section */}
+            <div className="space-y-3">
+              <label className="flex items-center gap-2 text-sm font-semibold text-slate-300 uppercase tracking-wider">
+                <Zap className="w-4 h-4 text-cyan-400" />
+                Image Pre-processing
+              </label>
+              <p className="text-xs text-slate-500">
+                Optimize images for e-paper display characteristics.
+              </p>
+
+              {/* Quick Presets */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => onPreProcessingChange(RECOMMENDED_PREPROCESSING)}
+                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    isPreProcessingRecommended
+                      ? 'bg-cyan-500 text-white'
+                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                  }`}
+                >
+                  Recommended
+                </button>
+                <button
+                  onClick={() => onPreProcessingChange(DEFAULT_PREPROCESSING)}
+                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    isPreProcessingDefault
+                      ? 'bg-cyan-500 text-white'
+                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                  }`}
+                >
+                  None
+                </button>
+              </div>
+
+              {/* Gamma */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-slate-300">Gamma</label>
+                  <span className="text-sm text-slate-400">{preProcessing.gamma.toFixed(1)}</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="3.0"
+                  step="0.1"
+                  value={preProcessing.gamma}
+                  onChange={(e) => onPreProcessingChange({ ...preProcessing, gamma: parseFloat(e.target.value) })}
+                  className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                />
+                <p className="text-xs text-slate-500">
+                  Gamma correction. 1.0 = no change, 1.8-2.2 recommended for e-paper.
+                </p>
+              </div>
+
+              {/* Pre-processing Contrast */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-slate-300">Pre-contrast</label>
+                  <span className="text-sm text-slate-400">{preProcessing.contrast.toFixed(2)}</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="2.0"
+                  step="0.05"
+                  value={preProcessing.contrast}
+                  onChange={(e) => onPreProcessingChange({ ...preProcessing, contrast: parseFloat(e.target.value) })}
+                  className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                />
+                <p className="text-xs text-slate-500">
+                  Contrast before dithering. 1.2-1.3 recommended.
+                </p>
+              </div>
+
+              {/* Brightness */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-slate-300">Brightness</label>
+                  <span className="text-sm text-slate-400">{(preProcessing.brightness * 100).toFixed(0)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="-0.3"
+                  max="0.3"
+                  step="0.01"
+                  value={preProcessing.brightness}
+                  onChange={(e) => onPreProcessingChange({ ...preProcessing, brightness: parseFloat(e.target.value) })}
+                  className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                />
+                <p className="text-xs text-slate-500">
+                  Brightness adjustment. 0 = no change.
+                </p>
+              </div>
+
+              {/* Saturation */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-slate-300">Saturation</label>
+                  <span className="text-sm text-slate-400">{preProcessing.saturation.toFixed(1)}</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="2.0"
+                  step="0.1"
+                  value={preProcessing.saturation}
+                  onChange={(e) => onPreProcessingChange({ ...preProcessing, saturation: parseFloat(e.target.value) })}
+                  className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                />
+                <p className="text-xs text-slate-500">
+                  Color saturation. 1.0 = no change, 0 = grayscale.
+                </p>
+              </div>
+
+              {/* Sharpness */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-slate-300">Sharpness</label>
+                  <span className="text-sm text-slate-400">{preProcessing.sharpness.toFixed(1)}</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="2.0"
+                  step="0.1"
+                  value={preProcessing.sharpness}
+                  onChange={(e) => onPreProcessingChange({ ...preProcessing, sharpness: parseFloat(e.target.value) })}
+                  className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                />
+                <p className="text-xs text-slate-500">
+                  Unsharp mask. 0 = off, 0.5-1.0 recommended.
+                </p>
+              </div>
+            </div>
+
+            <hr className="border-slate-700" />
+
             {/* Dither Strength */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">

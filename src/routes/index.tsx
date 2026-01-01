@@ -6,7 +6,7 @@ import { CropModal } from '../components/CropModal'
 import { SettingsPanel, type DitherAlgorithm, type ColorPalette, type Orientation } from '../components/SettingsPanel'
 import { useGooglePhotos, fetchPhotoAsBlob, type PickerMediaItem } from '../hooks/useGooglePhotos'
 import { applyDithering, type DitheringAlgorithm, type PaletteKey } from '../lib/dithering'
-import { scaleImageWithCrop, type CropMode, type CropOffset } from '../lib/image-processing'
+import { scaleImageWithCrop, applyPreProcessing, DEFAULT_PREPROCESSING, type CropMode, type CropOffset, type PreProcessingSettings } from '../lib/image-processing'
 import { downloadImage, downloadAllAsZip, blobToDataUrl, imageDataToBmp, type ImageFormat } from '../lib/download'
 
 export const Route = createFileRoute('/')({ component: App })
@@ -44,6 +44,7 @@ function App() {
   const [imageFormat, setImageFormat] = useState<ImageFormat>('bmp')
   const [backgroundColor, setBackgroundColor] = useState('#FFFFFF')
   const [orientation, setOrientation] = useState<Orientation>('portrait')
+  const [preProcessing, setPreProcessing] = useState<PreProcessingSettings>(DEFAULT_PREPROCESSING)
   const [images, setImages] = useState<ProcessedImage[]>([])
   const [modalImage, setModalImage] = useState<{ url: string; title: string } | null>(null)
   const [isProcessingAll, setIsProcessingAll] = useState(false)
@@ -98,10 +99,13 @@ function App() {
         const targetHeight = orientation === 'portrait' ? 1600 : 1200
         const scaledImageData = await scaleImageWithCrop(processedImage, targetWidth, targetHeight, backgroundColor, cropMode, cropOffset)
 
+        // Apply pre-processing (gamma, contrast, saturation, sharpening)
+        const preProcessedImageData = applyPreProcessing(scaledImageData, preProcessing)
+
         // Apply dithering
         const paletteKey = paletteMap[palette]
         const ditheredImageData = applyDithering(
-          scaledImageData,
+          preProcessedImageData,
           algorithm as DitheringAlgorithm,
           paletteKey,
           strength,
@@ -168,7 +172,7 @@ function App() {
         )
       }
     },
-    [algorithm, palette, strength, contrast, showOverlay, backgroundColor, orientation]
+    [algorithm, palette, strength, contrast, showOverlay, backgroundColor, orientation, preProcessing]
   )
 
   const handleFilesSelected = useCallback((files: File[]) => {
@@ -416,6 +420,11 @@ function App() {
     resetDitheredImages()
   }, [resetDitheredImages])
 
+  const handlePreProcessingChange = useCallback((newSettings: PreProcessingSettings) => {
+    setPreProcessing(newSettings)
+    resetDitheredImages()
+  }, [resetDitheredImages])
+
   // Drag and drop handlers
   const handleDragStart = useCallback((index: number) => {
     setDraggedIndex(index)
@@ -525,6 +534,7 @@ function App() {
               imageFormat={imageFormat}
               backgroundColor={backgroundColor}
               orientation={orientation}
+              preProcessing={preProcessing}
               onAlgorithmChange={handleAlgorithmChange}
               onPaletteChange={handlePaletteChange}
               onStrengthChange={handleStrengthChange}
@@ -533,6 +543,7 @@ function App() {
               onImageFormatChange={setImageFormat}
               onBackgroundColorChange={handleBackgroundColorChange}
               onOrientationChange={setOrientation}
+              onPreProcessingChange={handlePreProcessingChange}
             />
 
             {/* Google Photos button (only when signed in) */}

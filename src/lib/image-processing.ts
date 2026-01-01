@@ -434,3 +434,172 @@ export async function scaleImageToCanvas(
   ctx.putImageData(imageData, 0, 0);
   return canvas;
 }
+
+/**
+ * Pre-processing settings for e-paper optimization
+ */
+export interface PreProcessingSettings {
+  gamma: number;           // 1.0 = no change, recommended 1.8-2.2 for e-paper
+  sharpness: number;       // 0 = no sharpening, recommended 0.5-1.0
+  saturation: number;      // 1.0 = no change, > 1 = more saturated
+  brightness: number;      // 0 = no change, positive = brighter
+  contrast: number;        // 1.0 = no change, > 1 = more contrast (recommended 1.2-1.3)
+}
+
+/**
+ * Default pre-processing settings (no changes)
+ */
+export const DEFAULT_PREPROCESSING: PreProcessingSettings = {
+  gamma: 1.0,
+  sharpness: 0,
+  saturation: 1.0,
+  brightness: 0,
+  contrast: 1.0,
+};
+
+/**
+ * Recommended pre-processing settings for e-paper displays
+ * Based on Good-Display recommendations
+ */
+export const RECOMMENDED_PREPROCESSING: PreProcessingSettings = {
+  gamma: 2.0,           // Gamma correction for e-paper
+  sharpness: 0.7,       // Mild sharpening
+  saturation: 1.1,      // Slight saturation boost
+  brightness: 0.05,     // Slight brightness increase
+  contrast: 1.25,       // 25% contrast increase
+};
+
+/**
+ * Apply gamma correction to image data
+ */
+function applyGamma(imageData: ImageData, gamma: number): void {
+  if (gamma === 1.0) return;
+
+  const data = imageData.data;
+  const invGamma = 1 / gamma;
+
+  // Build lookup table for performance
+  const lut = new Uint8Array(256);
+  for (let i = 0; i < 256; i++) {
+    lut[i] = Math.round(255 * Math.pow(i / 255, invGamma));
+  }
+
+  for (let i = 0; i < data.length; i += 4) {
+    data[i] = lut[data[i]];         // R
+    data[i + 1] = lut[data[i + 1]]; // G
+    data[i + 2] = lut[data[i + 2]]; // B
+  }
+}
+
+/**
+ * Apply brightness and contrast adjustments
+ */
+function applyBrightnessContrast(imageData: ImageData, brightness: number, contrast: number): void {
+  if (brightness === 0 && contrast === 1.0) return;
+
+  const data = imageData.data;
+  const brightnessOffset = brightness * 255;
+
+  for (let i = 0; i < data.length; i += 4) {
+    for (let c = 0; c < 3; c++) {
+      // Apply contrast around midpoint (128), then add brightness
+      let value = ((data[i + c] - 128) * contrast + 128) + brightnessOffset;
+      data[i + c] = Math.max(0, Math.min(255, Math.round(value)));
+    }
+  }
+}
+
+/**
+ * Apply saturation adjustment
+ */
+function applySaturation(imageData: ImageData, saturation: number): void {
+  if (saturation === 1.0) return;
+
+  const data = imageData.data;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+
+    // Calculate luminance
+    const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+
+    // Interpolate between gray and color
+    data[i] = Math.max(0, Math.min(255, Math.round(gray + saturation * (r - gray))));
+    data[i + 1] = Math.max(0, Math.min(255, Math.round(gray + saturation * (g - gray))));
+    data[i + 2] = Math.max(0, Math.min(255, Math.round(gray + saturation * (b - gray))));
+  }
+}
+
+/**
+ * Apply unsharp mask sharpening
+ */
+function applySharpening(imageData: ImageData, amount: number): ImageData {
+  if (amount === 0) return imageData;
+
+  const { width, height, data } = imageData;
+  const output = new ImageData(width, height);
+  const outData = output.data;
+
+  // Simple 3x3 unsharp mask kernel
+  const radius = 1;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = (y * width + x) * 4;
+
+      for (let c = 0; c < 3; c++) {
+        const center = data[idx + c];
+
+        // Calculate blur (average of neighbors)
+        let blur = 0;
+        let count = 0;
+
+        for (let dy = -radius; dy <= radius; dy++) {
+          for (let dx = -radius; dx <= radius; dx++) {
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+              const nidx = (ny * width + nx) * 4;
+              blur += data[nidx + c];
+              count++;
+            }
+          }
+        }
+        blur /= count;
+
+        // Unsharp mask: original + amount * (original - blur)
+        const sharpened = center + amount * (center - blur);
+        outData[idx + c] = Math.max(0, Math.min(255, Math.round(sharpened)));
+      }
+      outData[idx + 3] = data[idx + 3]; // Alpha
+    }
+  }
+
+  return output;
+}
+
+/**
+ * Apply all pre-processing settings to image data
+ */
+export function applyPreProcessing(imageData: ImageData, settings: PreProcessingSettings): ImageData {
+  // Clone the image data to avoid modifying original
+  const result = new ImageData(
+    new Uint8ClampedArray(imageData.data),
+    imageData.width,
+    imageData.height
+  );
+
+  // Apply adjustments in order
+  applyGamma(result, settings.gamma);
+  applyBrightnessContrast(result, settings.brightness, settings.contrast);
+  applySaturation(result, settings.saturation);
+
+  // Sharpening returns new ImageData
+  if (settings.sharpness > 0) {
+    return applySharpening(result, settings.sharpness);
+  }
+
+  return result;
+}
