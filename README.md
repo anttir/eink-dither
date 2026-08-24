@@ -25,6 +25,72 @@ Convert images to dithered format optimized for e-ink displays like E-ink Spectr
 3. Browse and select images
 4. Download processed images
 
+## Connecting the device
+
+Target hardware is a GooDisplay **ESP32-133C02** driver board with a 13.3" **GDEP133C02** E Ink Spectra 6 panel (1600×1200), sold as **NeoFrame** via einkapp.com.
+
+### Ports and the switch
+
+| Control | What it is | Used for |
+|---|---|---|
+| **USB Type-C** | Power in + program download | Wall adapter or Li-ion battery; firmware flashing |
+| **USB Type-A** | "USB communication interface" | Image upload from a PC, with a **dual-male USB-A ↔ USB-A** cable |
+| **microSD slot** | Offline image store | `image0.bmp`, `image1.bmp`, … (card not included) |
+| **Slide switch** | Power ON/OFF | The board's only switch — must be **ON** |
+
+E-paper holds the last image indefinitely with the power off. That is the panel working correctly, not a fault.
+
+### Firmware variants — check this first
+
+The board ships with **one** of four firmwares, and each supports exactly one update method. Switching method means re-flashing.
+
+| Variant | Behaviour |
+|---|---|
+| `-1` | Image update over USB from `Spectra 6_Image_Tool.exe` |
+| `-2` | Reads `imageN.bmp` from the SD card, advances roughly every 2 min |
+| `-3` | Creates a `NeoFrame` WiFi access point; images pushed from a web page |
+| `-4` | Fixed demo images (colour bars, test patterns) |
+
+If USB or WiFi appears dead, confirm the variant before debugging anything else.
+
+### Direct USB connection (variant -1)
+
+1. Connect the panel to the board and power the board via **Type-C** (adapter or battery).
+2. Slide the power switch to **ON**.
+3. Connect the board's **USB-A** port to a PC USB-A port using a **dual-male USB-A cable**. This is a separate port from the Type-C one — Type-C is power/flashing only.
+4. Install and launch GooDisplay's `Spectra 6_Image_Tool.exe`, click **Connect**.
+   - Success shows `WF00KWR` on the device. If nothing appears, check the COM port in Device Manager.
+5. Select **13.3**, click **Flash**.
+6. Click **LOAD**, pick a pre-dithered 1200×1600 image (this app's output), choose a slot `Image1`–`Image15`, click **WRITE**.
+7. Click **Send To EPD**. The panel refreshes.
+
+### WiFi from a laptop or phone (variant -3)
+
+1. **Open the control page first**, while still on your normal network: <http://www.einkapp.com/esp32-133c02.html>. The board's access point has no internet, so the page cannot be loaded after joining it. Bookmark it.
+2. Power the board via Type-C or battery and switch **ON**. It starts an access point.
+3. Join WiFi **`NeoFrame`**, password **`123456789`**.
+   - Windows and Android warn "no internet access" and offer to switch networks — choose **Stay connected**, or the upload will fail.
+4. In the page: set **Colors Mode = Six Colors**, choose a dithering algorithm, upload the image, press **Send to Frame**.
+
+The page posts to the board at the **ESP32 IP address** in its form. To use images dithered by *this* app instead of the page's own dithering, feed it an already-dithered BMP.
+
+### SD card (variant -2)
+
+Copy this app's BMP output to a microSD card as `image0.bmp`, `image1.bmp`, …, insert it, and switch the board on.
+
+> **Note:** this app names files `image00.bmp` / `image01.bmp`, while the board manual documents `image0.bmp` / `image1.bmp`. Verify against your firmware before assuming the carousel picks them up.
+
+### Panel constraints
+
+Relevant to any custom firmware written for this board:
+
+- Minimum **180 s** between refreshes, and at least one full refresh every 24 h.
+- Never leave the panel powered and idle — put it to sleep or power it off, or the film layer degrades irreversibly.
+- After entering sleep the controller ignores image data until re-initialised.
+- Two driver ICs, one per screen half (CS pins **M** and **S**). Image data must be split into two halves or the display comes out misaligned.
+
+Source: [ESP32-133C02-X instruction manual (GooDisplay)](https://ecksteinimg.de/Photo/GD02009/EN-ESP32-133C02.pdf), [product page](https://www.good-display.com/product/574.html).
+
 ## Development
 
 ```bash
