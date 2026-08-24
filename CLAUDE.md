@@ -57,6 +57,10 @@ Agents work this way by default — no exceptions without the user saying so exp
 3. **PR only.** Nothing lands on `main` except through a pull request. No direct pushes to `main`.
 4. **PR links its issue.** Every PR body must reference the issue — use `Closes #<n>` so merging closes it. If the PR only partially addresses the issue, use `Refs #<n>` and close the issue manually when it is actually done.
 
+**No branch protection and no auto-merge, deliberately.** `main` is unprotected and `allow_auto_merge` is off repo-wide. PRs exist for **traceability** in a one-person project, not for gated review. Do not propose adding branch protection.
+
+Merge with `gh pr merge <n> --squash`. Avoid `--auto`: with auto-merge disabled it only works when GitHub has already computed the PR as mergeable, and errors out otherwise — so it fails unpredictably on freshly-opened PRs.
+
 Tracker details: `docs/agents/issue-tracker.md`.
 
 ## Agent skills
