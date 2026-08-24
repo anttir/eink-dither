@@ -57,6 +57,8 @@ Agents work this way by default — no exceptions without the user saying so exp
 3. **PR only.** Nothing lands on `main` except through a pull request. No direct pushes to `main`.
 4. **PR links its issue.** Every PR body must reference the issue — use `Closes #<n>` so merging closes it. If the PR only partially addresses the issue, use `Refs #<n>` and close the issue manually when it is actually done.
 
+**No branch protection, deliberately.** `main` is unprotected, so `gh pr merge --auto` merges immediately instead of queueing for review. That is the intended behaviour: this is a one-person project and PRs exist for **traceability**, not gated review. Do not propose adding branch protection.
+
 Tracker details: `docs/agents/issue-tracker.md`.
 
 ## Agent skills
