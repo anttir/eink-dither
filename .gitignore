@@ -11,3 +11,7 @@ count.txt
 .output
 .vinxi
 todos.json
+
+# Stock firmware dumps read off the e-paper board. Large binaries, and the only
+# copies in existence - GooDisplay does not publish them. Ignore, never delete.
+device-backup/
