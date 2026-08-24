@@ -47,3 +47,28 @@ This is a React SPA for converting images to dithered formats optimized for e-in
 
 - `VITE_GOOGLE_CLIENT_ID` - Required for Google Photos integration
 - `VITE_BASE_PATH` - Base path for deployment (defaults to `/`)
+
+## Workflow (mandatory)
+
+Agents work this way by default — no exceptions without the user saying so explicitly.
+
+1. **Worktree always.** Never work on `main` or in the primary checkout. Create/use a git worktree on its own branch.
+2. **Issue first.** Every change starts from a GitHub issue. If none exists, create one (`gh issue create`) before writing code.
+3. **PR only.** Nothing lands on `main` except through a pull request. No direct pushes to `main`.
+4. **PR links its issue.** Every PR body must reference the issue — use `Closes #<n>` so merging closes it. If the PR only partially addresses the issue, use `Refs #<n>` and close the issue manually when it is actually done.
+
+Tracker details: `docs/agents/issue-tracker.md`.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues on `anttir/eink-dither`, via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-role vocabulary, label strings unchanged. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context — `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
