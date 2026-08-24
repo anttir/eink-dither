@@ -29,13 +29,23 @@ Convert images to dithered format optimized for e-ink displays like E-ink Spectr
 
 Target hardware is a GooDisplay **ESP32-133C02** driver board with a 13.3" **GDEP133C02** E Ink Spectra 6 panel (1600×1200), sold as **NeoFrame** via einkapp.com.
 
+### Hardware
+
+| Spec | Value |
+|---|---|
+| MCU | **ESP32-S3** (512 KB SRAM) — GooDisplay's product page, manuals and resellers all say only "ESP32"; that's wrong |
+| PSRAM | ≥ 8 MB, octal (OPI) |
+| Flash | ≥ 16 MB |
+| SD interface | SPI, not SDMMC — ~2.5 MB/s bus ceiling |
+| User buttons | SW2 / SW3 / SW4 on IO12 / IO13 / IO14 (active-high) |
+
 ### Ports and the switch
 
 | Control | What it is | Used for |
 |---|---|---|
 | **USB Type-C** | Power in + program download | Wall adapter or Li-ion battery; firmware flashing |
 | **USB Type-A** | "USB communication interface" | Image upload from a PC, with a **dual-male USB-A ↔ USB-A** cable |
-| **microSD slot** | Offline image store | `image0.bmp`, `image1.bmp`, … (card not included) |
+| **microSD slot** | Offline image store | Numbered BMPs or a packed `images.bin`, depending on firmware — see below (card not included) |
 | **Slide switch** | Power ON/OFF | The board's only switch — must be **ON** |
 
 E-paper holds the last image indefinitely with the power off. That is the panel working correctly, not a fault.
@@ -47,9 +57,11 @@ The board ships with **one** of four firmwares, and each supports exactly one up
 | Variant | Behaviour |
 |---|---|
 | `-1` | Image update over USB from `Spectra 6_Image_Tool.exe` |
-| `-2` | Reads `imageN.bmp` from the SD card, advances roughly every 2 min |
+| `-2` | Reads image data from the SD card, advances roughly every 2 min — on-card format depends on revision, see below |
 | `-3` | Creates a `NeoFrame` WiFi access point; images pushed from a web page |
 | `-4` | Fixed demo images (colour bars, test patterns) |
+
+The newer 23-page spec renames these `-USB` / `-SD` / `-WIFI` / `-CH` — same four functions, updated labels.
 
 If USB or WiFi appears dead, confirm the variant before debugging anything else.
 
@@ -74,11 +86,16 @@ If USB or WiFi appears dead, confirm the variant before debugging anything else.
 
 The page posts to the board at the **ESP32 IP address** in its form. To use images dithered by *this* app instead of the page's own dithering, feed it an already-dithered BMP.
 
-### SD card (variant -2)
+### SD card (variant -2 / -SD)
 
-Copy this app's BMP output to a microSD card as `image0.bmp`, `image1.bmp`, …, insert it, and switch the board on.
+On-card format depends on the firmware revision flashed to the board:
 
-> **Note:** this app names files `image00.bmp` / `image01.bmp`, while the board manual documents `image0.bmp` / `image1.bmp`. Verify against your firmware before assuming the carousel picks them up.
+- **Older SD firmware** (matching the 16-page manual): individually numbered files, `image0.bmp`, `image1.bmp`, …
+- **Newer stock SD firmware**: a single packed **`images.bin`** — all frames plus an interval header, produced by GooDisplay's own [BMP-to-BIN tool](https://www.e-paper-display.com/bmp.html), not raw numbered BMPs.
+
+> **Note:** this app names files `image00.bmp` / `image01.bmp`, matching neither scheme exactly. For numbered-file firmware, rename to `image0.bmp` / `image1.bmp` before copying. For `images.bin` firmware, run the images through GooDisplay's tool instead of copying BMPs directly.
+
+Verify which scheme your board's firmware uses before assuming either works.
 
 ### Panel constraints
 
@@ -89,7 +106,7 @@ Relevant to any custom firmware written for this board:
 - After entering sleep the controller ignores image data until re-initialised.
 - Two driver ICs, one per screen half (CS pins **M** and **S**). Image data must be split into two halves or the display comes out misaligned.
 
-Source: [ESP32-133C02-X instruction manual (GooDisplay)](https://ecksteinimg.de/Photo/GD02009/EN-ESP32-133C02.pdf), [product page](https://www.good-display.com/product/574.html).
+Source: [ESP32-133C02-X instruction manual, 16-page (GooDisplay)](https://ecksteinimg.de/Photo/GD02009/EN-ESP32-133C02.pdf), [ESP32-133C02 specification, 23-page — newer revision, only doc with pin tables (GooDisplay)](https://v4.cecdn.yun300.cn/100001_1909185148/EN-ESP32-133C02.pdf), [product page](https://www.good-display.com/product/574.html).
 
 ## Development
 
