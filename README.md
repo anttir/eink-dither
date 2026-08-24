@@ -140,12 +140,21 @@ Verify which scheme your board's firmware uses before assuming either works.
 
 ### Panel constraints
 
-Relevant to any custom firmware written for this board:
+Relevant to any custom firmware written for this board. Several widely-repeated figures about this panel are wrong; the corrections below come from the datasheet and GooDisplay's own reference driver rather than from the manual's prose (see issue #9).
 
-- Minimum **180 s** between refreshes, and at least one full refresh every 24 h.
-- Never leave the panel powered and idle — put it to sleep or power it off, or the film layer degrades irreversibly.
-- After entering sleep the controller ignores image data until re-initialised.
-- Two driver ICs, one per screen half (CS pins **M** and **S**). Image data must be split into two halves or the display comes out misaligned.
+**A refresh is ~12 s, not ~30 s.** The datasheet gives `Tupdate` typ. **12 s @ 25 °C**; GxEPD2 measures 12.47 s on the 7.3" Spectra 6 sibling; Waveshare budget 19 s for their 13.3". Budget ~15 s and wait on `BUSY_N`. The ~30 s everyone quotes is **per-row pacing in the demo firmware** — the vendor sample delays 1 ms per row, a battery fork uses 8 ms, which is 25 s of pure pacing across 1600 rows × 2 ICs before the waveform even starts. It exists to hold down the ~850 mA peak inrush on battery, so it is a tunable, not a panel property.
+
+**Partial window refresh exists.** The reference driver implements `PTLW` (command `0x83`) with enforced constraints: the window must sit inside **one IC's 600 px half**, `xStart` and `xStart + width` must be multiples of 4, minimum width 16 px, and vertical granularity is 2 lines. What Spectra 6 lacks is a *fast* mode — a window update runs the same flashing waveform, so it saves **transfer, not time**. Vendor material saying "Full Refresh only" is about refresh quality modes, not addressable regions.
+
+**180 s between refreshes is a longevity guideline, not a hardware interlock.** The number appears only in the manual's prose precautions, worded "it is recommended"; it occurs zero times in the 29-page datasheet and has no entry in any timing table. Nothing blocks a refresh at t+15 s. But nobody quantifies the cumulative film wear either, so treat it as a firmware budget with deliberate, rate-limited exceptions — not as something to ignore.
+
+**At least one full refresh every 24 h.** Its purpose is ghosting / image sticking, not safety. A carousel satisfies it automatically; it only bites in degenerate states (paused, all images excluded, crash-loop).
+
+**Never leave the panel powered and idle** — prolonged high voltage on the film layer causes irreversible failure. "Powered" here means *the panel driver left in an active high-voltage state*, not *the ESP32 has power*. The invariant to hold is "the panel is powered only during the seconds it is being refreshed" — the reference driver's refresh already ends with `POF`. An always-on frame serving HTTP is fine.
+
+**After entering sleep the controller ignores image data until re-initialised.**
+
+**Two driver ICs split the panel left/right, not top/bottom.** Native frame is 1200 (H) × 1600 (V). CS **M** (main) drives the **left** 600 × 1600, CS **S** (sub) the **right** 600 × 1600, and each has its own origin — S's `X = 0` is the panel centre line. Only one CS may be low at a time. At 4 bpp / two pixels per byte that is **300 bytes per row per IC**, 480 000 bytes each, 960 000 total, so splitting is a per-row byte-range operation on a 600-byte stride. Get it wrong and the display comes out misaligned rather than failing outright.
 
 Source: [ESP32-133C02-X instruction manual, 16-page (GooDisplay)](https://ecksteinimg.de/Photo/GD02009/EN-ESP32-133C02.pdf), [ESP32-133C02 specification, 23-page — newer revision, only doc with pin tables (GooDisplay)](https://v4.cecdn.yun300.cn/100001_1909185148/EN-ESP32-133C02.pdf), [product page](https://www.good-display.com/product/574.html).
 
