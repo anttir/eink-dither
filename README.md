@@ -31,24 +31,37 @@ Target hardware is a GooDisplay **ESP32-133C02** driver board with a 13.3" **GDE
 
 ### Hardware
 
+Read off the board itself, except where noted.
+
 | Spec | Value |
 |---|---|
-| MCU | **ESP32-S3** (512 KB SRAM) — GooDisplay's product page, manuals and resellers all say only "ESP32"; that's wrong |
-| PSRAM | ≥ 8 MB, octal (OPI) |
-| Flash | ≥ 16 MB |
+| Module | **`ESP32-S3-WROOM-1 MCN16R8`** (marked on the RF shield) |
+| MCU | **ESP32-S3** (QFN56) rev v0.2, dual core + LP core, 240 MHz, 40 MHz crystal, 512 KB SRAM — GooDisplay's product page, manuals and resellers all say only "ESP32"; that's wrong |
+| PSRAM | **8 MB, octal (OPI), 3.3 V** — the `R8` in the part number |
+| Flash | **16 MB**, quad bus (DIO at boot), 3.3 V — the `N16` in the part number |
 | SD interface | SPI, not SDMMC — ~2.5 MB/s bus ceiling |
-| User buttons | SW2 / SW3 / SW4 on IO12 / IO13 / IO14 (active-high) |
+| User buttons | SW2 / SW3 / SW4 — presence confirmed on the board; the IO12 / IO13 / IO14 active-high mapping comes from vendor build artifacts and has **not** been verified electrically |
+
+Vendor Arduino build artifacts declare `FlashSize=4M`. That is an Arduino default, not the part — the flash is 16 MB, which is what makes two 3 MB OTA app slots plus a UI filesystem affordable.
 
 ### Ports and the switch
 
-| Control | What it is | Used for |
-|---|---|---|
-| **USB Type-C** | Power in + program download | Wall adapter or Li-ion battery; firmware flashing |
-| **USB Type-A** | "USB communication interface" | Image upload from a PC, with a **dual-male USB-A ↔ USB-A** cable |
-| **microSD slot** | Offline image store | Numbered BMPs or a packed `images.bin`, depending on firmware — see below (card not included) |
-| **Slide switch** | Power ON/OFF | The board's only switch — must be **ON** |
+Silkscreen designators are given because the board carries three USB-shaped connectors and it is easy to pick the wrong one.
 
-E-paper holds the last image indefinitely with the power off. That is the panel working correctly, not a fault.
+| Control | Silkscreen | What it is | Used for |
+|---|---|---|---|
+| **USB Type-C** (bottom centre) | `USB5` | Power in + program download; carries a **CH340** USB-serial bridge | Wall adapter or Li-ion battery; firmware flashing; serial console |
+| **USB Type-A** (bottom right) | — | "USB communication interface" | Image upload from a PC, with a **dual-male USB-A ↔ USB-A** cable |
+| **microSD slot** | `CARD1` | Offline image store | Numbered BMPs or a packed `images.bin`, depending on firmware — see below (card not included) |
+| **Slide switch** | `SW1` | Power ON/OFF | The board's only slide switch — must be **ON** |
+| **User buttons** | `SW2` `SW3` `SW4` | Three push-buttons stacked on the left edge (`SW4` topmost) | Free for custom firmware |
+| Unidentified connector (right edge) | `USB4` | Adjacent silkscreen reads `battre` — purpose unconfirmed | — |
+
+A breakout header along the right edge exposes the panel bus: `GND, RST, BUSY, CSB_M, CSB_S, D/C/X, SI3, SI2, SI1, SI0, SCL`. `CSB_M` and `CSB_S` are separate chip selects, one per driver IC — the two-halves split shows up on the silkscreen as well as in the manual.
+
+**Driver gotcha on the Type-C port.** The bridge is a **CH340** (`USB\VID_1A86&PID_7523`), not a CP210x. With no driver bound Windows reports problem code 28 and creates **no COM port at all**, so the board looks completely absent rather than misbehaving. Check Device Manager for a `USB Serial` entry with a warning triangle before concluding the hardware is dead. The signed WCH driver may already be in the driver store; binding it takes an elevated `pnputil /add-driver C:\Windows\INF\oem120.inf /install` (substitute the `oemNN.inf` that `pnputil /enum-drivers` reports for `ch341ser.inf`).
+
+E-paper holds the last image indefinitely with the power off. That is the panel working correctly, not a fault — but the stock WiFi firmware overwrites that image on every boot, see variant `-3` below.
 
 ### Firmware variants — check this first
 
@@ -63,7 +76,31 @@ The board ships with **one** of four firmwares, and each supports exactly one up
 
 The newer 23-page spec renames these `-USB` / `-SD` / `-WIFI` / `-CH` — same four functions, updated labels.
 
-If USB or WiFi appears dead, confirm the variant before debugging anything else.
+If USB or WiFi appears dead, confirm the variant before debugging anything else. The fastest way to tell is the serial boot log — the app announces itself right after the ROM banner. The unit this project was developed against ships **`-3`**.
+
+### Interrogating the board over USB-C (read-only)
+
+Needs `pyserial` and `esptool`. Nothing here writes to the device.
+
+```bash
+python -m serial.tools.list_ports -v    # find the CH340 port
+esptool --port COM3 chip-id             # chip, revision, features, MAC
+esptool --port COM3 flash-id            # flash manufacturer and size
+```
+
+For the boot log, open the port at **115200**, hold DTR low (IO0 high = normal boot, not download mode) and pulse RTS to reset, then capture. Avoid interactive `miniterm` from a script — it will hang.
+
+Back the stock firmware up before writing anything to the board:
+
+```bash
+esptool --port COM3 -b 115200 read-flash 0 ALL stock-firmware-backup.bin
+```
+
+- GooDisplay publishes no stock firmware binary. That read-out is the **only copy that will ever exist** — take it before your first `write_flash`, and verify it is 16777216 bytes.
+- **Don't use `-b 460800`.** The CH340 corrupts the transfer partway through (`Corrupt data, expected 0x1000 bytes but received 0xfe9 bytes`). 115200 is reliable and takes about 25 minutes for 16 MB.
+- Keep the backup outside the repo tree.
+
+Two strapping pins are hazards for custom firmware: **IO45** (VDD_SPI voltage select) doubles as the panel power enable and must never be left asserted across a reset, and **IO3** (SD MOSI) is also strapping.
 
 ### Direct USB connection (variant -1)
 
@@ -85,6 +122,10 @@ If USB or WiFi appears dead, confirm the variant before debugging anything else.
 4. In the page: set **Colors Mode = Six Colors**, choose a dithering algorithm, upload the image, press **Send to Frame**.
 
 The page posts to the board at the **ESP32 IP address** in its form. To use images dithered by *this* app instead of the page's own dithering, feed it an already-dithered BMP.
+
+The board also **serves its own onboarding page** at `http://192.168.4.1/wifi`, which its boot log advertises. The hosted einkapp.com page is not the only way in.
+
+> **This firmware repaints the panel on every boot.** Startup runs a full refresh with a built-in default image *before* the access point comes up, and it does not restore whatever was displayed previously. Any reset — including the automatic one at the end of every `esptool` invocation — costs you the image on the panel and one refresh out of the 180 s budget.
 
 ### SD card (variant -2 / -SD)
 
