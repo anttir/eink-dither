@@ -31,7 +31,7 @@ Target hardware is a GooDisplay **ESP32-133C02** driver board with a 13.3" **GDE
 
 ### Hardware
 
-Read off the board itself, except where noted.
+Read off the board itself, except where noted. Free GPIO, the SD interface and the rest of the budget are worked out in [`docs/research/esp32-133c02-hardware-budget.md`](docs/research/esp32-133c02-hardware-budget.md).
 
 | Spec | Value |
 |---|---|
@@ -140,7 +140,7 @@ Verify which scheme your board's firmware uses before assuming either works.
 
 ### Panel constraints
 
-Relevant to any custom firmware written for this board. Several widely-repeated figures about this panel are wrong; the corrections below come from the datasheet and GooDisplay's own reference driver rather than from the manual's prose (see issue #9).
+Relevant to any custom firmware written for this board. Several widely-repeated figures about this panel are wrong; the corrections below come from the datasheet and GooDisplay's own reference driver rather than from the manual's prose. Every claim here is sourced and tagged verified-or-inferred in [`docs/research/gdep133c02-refresh-mechanics.md`](docs/research/gdep133c02-refresh-mechanics.md) — read that before designing against any of these numbers.
 
 **A refresh is ~12 s, not ~30 s.** The datasheet gives `Tupdate` typ. **12 s @ 25 °C**; GxEPD2 measures 12.47 s on the 7.3" Spectra 6 sibling; Waveshare budget 19 s for their 13.3". Budget ~15 s and wait on `BUSY_N`. The ~30 s everyone quotes is **per-row pacing in the demo firmware** — the vendor sample delays 1 ms per row, a battery fork uses 8 ms, which is 25 s of pure pacing across 1600 rows × 2 ICs before the waveform even starts. It exists to hold down the ~850 mA peak inrush on battery, so it is a tunable, not a panel property.
 
