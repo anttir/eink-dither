@@ -4,13 +4,17 @@ Convert images to dithered format optimized for e-ink displays like E-ink Spectr
 
 ## Features
 
-- **Multiple dithering algorithms**: Floyd-Steinberg (default), Atkinson, Error Diffusion, Blue Noise
-- **Color palettes**: E-ink Spectra 6 Color, Black & White, Grayscale, Red/Black/White
+- **Multiple dithering algorithms**: Floyd-Steinberg (default), Atkinson, Stucki, Jarvis-Judice-Ninke
+- **Color palettes**: E-ink Spectra 6 (NeoFrame, ideal and calibrated variants), Black & White, 4-level Grayscale, Red/Black/White
 - **Image scaling**: Automatic Lanczos scaling to 1600x1200 resolution
 - **Local file upload**: Drag & drop or click to browse
 - **Google Photos integration**: Browse and select images from your Google Photos library
 - **Batch processing**: Process multiple images at once
 - **Download options**: Individual images or ZIP archive
+
+### Planned image-quality work
+
+Comparing against [FutureSharks/e-paper-art-display](https://github.com/FutureSharks/e-paper-art-display) and the library its image tool is ported from, [paperlesspaper/epdoptimize](https://github.com/paperlesspaper/epdoptimize), showed where the output quality is lost today. The main gap: each palette colour is used both for dithering and for export, where it should be the *measured* ink colour for dithering and preview and the *device* primary for export. Findings and rationale are in [`docs/research/futuresharks-epdoptimize-prior-art.md`](docs/research/futuresharks-epdoptimize-prior-art.md); the work is tracked in [#26](https://github.com/anttir/eink-dither/issues/26)–[#31](https://github.com/anttir/eink-dither/issues/31).
 
 ## Usage
 
